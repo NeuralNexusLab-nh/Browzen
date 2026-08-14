@@ -18,6 +18,17 @@
 
 <p align="center"><sub>No installer. No cloud account. Just download and run.</sub></p>
 
+## Why Browzen?
+
+Many agent browsers run remotely or hide the browser behind automation APIs. Browzen runs a real Chromium browser locally, renders full JavaScript and CSS, and gives you a live Viewer while the agent works.
+
+| Typical agent browser | Browzen |
+| --- | --- |
+| Remote or hidden browser session | Real Chromium running on your computer |
+| Limited visibility into agent activity | Live Viewer with tab switching, scrolling, and safe tab closing |
+| Browser data may leave the device | Localhost-only by default |
+| Automation-first debugging | Structured page view, screenshots, console, network, cookies, storage, and errors |
+
 ## Run
 
 ```powershell

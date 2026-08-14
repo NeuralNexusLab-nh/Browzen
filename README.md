@@ -25,7 +25,7 @@ Browzen turns a fully rendered page into compact, structured context that an AI 
 | Typical agent browsing | With Browzen |
 | --- | --- |
 | Raw HTML, large DOM trees, or screenshots alone | Agent-friendly Markdown plus optional structured JSON |
-| Fragile CSS selectors and coordinate guessing | Short element IDs with stale-element detection |
+| Fragile CSS selectors and coordinate guessing | Short IDs, stale-element detection, and fresh post-action views |
 | Separate tools for tabs, actions, screenshots, and debugging | One consistent MCP toolset for the complete browser workflow |
 | Hard to understand why an action failed | Console, network, cookies, storage, and page errors through DevTools |
 | Agent activity is difficult to follow | A live Viewer for watching, switching, scrolling, and closing tabs |

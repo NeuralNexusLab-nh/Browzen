@@ -2,11 +2,11 @@
   <img src="logo.svg" width="520" alt="Browzen">
 </p>
 
-<h1 align="center">A clean Chromium browser made for people.</h1>
+<h1 align="center">Go anywhere. Stay in control.</h1>
 
 <p align="center">
-  Browzen is a fast, familiar Windows browser with real Chromium rendering.<br>
-  Browse with tabs, favicons, bookmarks, history, downloads, site permissions, and built-in DevTools.<br>
+  Browzen is a clean Windows browser with real Chromium rendering.<br>
+  Browse with compact tabs, visual favorites, persistent sessions, Incognito, screenshots, QR sharing, and built-in DevTools.<br>
   Your browsing data stays on your device, with no Browzen account or cloud service required.
 </p>
 
@@ -24,7 +24,7 @@
 .\Browzen.exe
 ```
 
-Use `Ctrl+T` for a new tab, `Ctrl+L` for the address bar, and `F12` for Developer Tools.
+Use `Ctrl+T` for a new tab, `Ctrl+Shift+N` for Incognito, `Ctrl+L` for the address bar, and `F12` for Developer Tools.
 
 Only the ready-to-run Windows executable is distributed in this repository.
 

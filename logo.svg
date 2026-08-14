@@ -11,9 +11,8 @@
     <circle cx="35" cy="39" r="4" fill="#ff6b78"/><circle cx="48" cy="39" r="4" fill="#ffc857"/><circle cx="61" cy="39" r="4" fill="#55d68b"/>
     <rect x="72" y="33" width="73" height="12" rx="6" fill="#e2e7f1"/>
     <rect x="39" y="69" width="102" height="51" rx="13" fill="url(#page)"/>
-    <path d="M63 80h18c13 0 18 15 8 22 13 8 6 24-8 24H63zm13 8v10h5c7 0 7-10 0-10zm0 18v12h6c8 0 8-12 0-12z" fill="#101728" transform="translate(8 -7)"/>
-    <path d="M108 80h17M108 94h17M108 108h10" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".9"/>
+    <path d="m66 76 24 19-24 19M99 119h34" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
   <text x="235" y="118" fill="#111827" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="90" font-weight="750" letter-spacing="-3">Browzen</text>
-  <text x="242" y="153" fill="#64748b" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="19" font-weight="600" letter-spacing="4">THE HUMAN WEB BROWSER</text>
+  <text x="242" y="153" fill="#64748b" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="19" font-weight="600" letter-spacing="2.5">GO ANYWHERE. STAY IN CONTROL.</text>
 </svg>

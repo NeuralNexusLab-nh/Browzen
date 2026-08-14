@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
   <title id="title">Browzen browser icon</title>
-  <desc id="desc">A browser window with a blue violet page and a white letter B</desc>
+  <desc id="desc">A browser window with a blue violet page and a white command prompt</desc>
   <defs>
     <linearGradient id="shell" x1="32" y1="20" x2="224" y2="236" gradientUnits="userSpaceOnUse">
       <stop stop-color="#26375f"/><stop offset="1" stop-color="#0b1020"/>
@@ -18,5 +18,5 @@
   <circle cx="62" cy="64" r="5" fill="#ff6b78"/><circle cx="79" cy="64" r="5" fill="#ffc857"/><circle cx="96" cy="64" r="5" fill="#55d68b"/>
   <rect x="111" y="57" width="83" height="14" rx="7" fill="#e2e7f1"/>
   <rect x="61" y="99" width="134" height="89" rx="24" fill="url(#page)"/>
-  <path fill="#fff" d="M99 118h31c20 0 31 9 31 23 0 9-5 16-14 19 11 3 17 11 17 22 0 16-12 26-33 26H99v-90Zm27 35c9 0 14-4 14-11 0-7-5-10-14-10h-7v21h7Zm3 41c10 0 15-5 15-13s-5-12-15-12h-10v25h10Z" transform="translate(-4 -10) scale(.96)"/>
+  <path d="m91 125 27 22-27 22M127 174h39" fill="none" stroke="#fff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

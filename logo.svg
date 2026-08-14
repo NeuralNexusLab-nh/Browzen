@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" role="img" aria-labelledby="title desc">
-  <title id="title">Browzen</title><desc id="desc">Browzen browser window logo</desc>
+  <title id="title">Browzen</title><desc id="desc">Browzen human web browser logo</desc>
   <defs>
     <linearGradient id="shell" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17233b"/><stop offset="1" stop-color="#0b1020"/></linearGradient>
     <linearGradient id="page" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#76e4ff"/><stop offset="1" stop-color="#7c65ff"/></linearGradient>
@@ -14,5 +14,6 @@
     <path d="M63 80h18c13 0 18 15 8 22 13 8 6 24-8 24H63zm13 8v10h5c7 0 7-10 0-10zm0 18v12h6c8 0 8-12 0-12z" fill="#101728" transform="translate(8 -7)"/>
     <path d="M108 80h17M108 94h17M108 108h10" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".9"/>
   </g>
-  <text x="235" y="127" fill="#111827" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="90" font-weight="750" letter-spacing="-3">Browzen</text>
+  <text x="235" y="118" fill="#111827" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="90" font-weight="750" letter-spacing="-3">Browzen</text>
+  <text x="242" y="153" fill="#64748b" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="19" font-weight="600" letter-spacing="4">THE HUMAN WEB BROWSER</text>
 </svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Browzen browser icon</title>
+  <desc id="desc">A browser window with a blue violet page and a white letter B</desc>
+  <defs>
+    <linearGradient id="shell" x1="32" y1="20" x2="224" y2="236" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#26375f"/><stop offset="1" stop-color="#0b1020"/>
+    </linearGradient>
+    <linearGradient id="page" x1="62" y1="76" x2="199" y2="208" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee"/><stop offset=".52" stop-color="#4f7cff"/><stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#071126" flood-opacity=".45"/>
+    </filter>
+  </defs>
+  <rect x="18" y="18" width="220" height="220" rx="52" fill="url(#shell)" filter="url(#shadow)"/>
+  <rect x="43" y="48" width="170" height="160" rx="24" fill="#f8faff"/>
+  <path d="M43 80h170" stroke="#d5dceb" stroke-width="6"/>
+  <circle cx="62" cy="64" r="5" fill="#ff6b78"/><circle cx="79" cy="64" r="5" fill="#ffc857"/><circle cx="96" cy="64" r="5" fill="#55d68b"/>
+  <rect x="111" y="57" width="83" height="14" rx="7" fill="#e2e7f1"/>
+  <rect x="61" y="99" width="134" height="89" rx="24" fill="url(#page)"/>
+  <path fill="#fff" d="M99 118h31c20 0 31 9 31 23 0 9-5 16-14 19 11 3 17 11 17 22 0 16-12 26-33 26H99v-90Zm27 35c9 0 14-4 14-11 0-7-5-10-14-10h-7v21h7Zm3 41c10 0 15-5 15-13s-5-12-15-12h-10v25h10Z" transform="translate(-4 -10) scale(.96)"/>
+</svg>

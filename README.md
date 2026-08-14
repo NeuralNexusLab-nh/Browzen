@@ -1,34 +1,22 @@
 <p align="center">
-  <img src="logo.svg" width="420" alt="Browzen">
+  <img src="logo.svg" width="520" alt="Browzen">
 </p>
 
-<h1 align="center">A real browser for AI agents.</h1>
+<h1 align="center">A clean Chromium browser made for people.</h1>
 
 <p align="center">
-  Browzen gives AI agents a real local Chromium browser with multi-tab control, structured interaction, screenshots, and DevTools through MCP.<br>
-  Humans can watch, switch, scroll, and close tabs safely in the live Viewer.<br>
-  Everything stays on your computer and listens on <code>127.0.0.1:7023</code> by default.
+  Browzen is a fast, familiar Windows browser with real Chromium rendering.<br>
+  Browse with tabs, favicons, bookmarks, history, downloads, site permissions, and built-in DevTools.<br>
+  Your browsing data stays on your device, with no Browzen account or cloud service required.
 </p>
 
 <p align="center">
-  <a href="https://github.com/NeuralNexusLab-nh/Browzen/raw/refs/heads/main/Browzen.exe">
-    <img src="https://img.shields.io/badge/DOWNLOAD_BROWZEN-WINDOWS_EXE-6C63FF?style=for-the-badge&logo=windows11&logoColor=white" alt="Download Browzen for Windows">
+  <a href="https://media.githubusercontent.com/media/NeuralNexusLab-nh/Browzen/main/Browzen.exe">
+    <img src="https://img.shields.io/badge/DOWNLOAD_BROWZEN-WINDOWS_EXE-536DFE?style=for-the-badge&logo=windows11&logoColor=white" alt="Download Browzen for Windows">
   </a>
 </p>
 
-<p align="center"><sub>No installer. No cloud account. Just download and run.</sub></p>
-
-## Why agents work better with Browzen
-
-Browzen turns a fully rendered page into compact, structured context that an AI can understand and act on directly. Agents spend less context on noisy HTML, avoid brittle selector guessing, and recover safely when a page changes—all while you can watch their work locally.
-
-| Typical agent browsing | With Browzen |
-| --- | --- |
-| Raw HTML, large DOM trees, or screenshots alone | Agent-friendly Markdown plus optional structured JSON |
-| Fragile CSS selectors and coordinate guessing | Short IDs, stale-element detection, and fresh post-action views |
-| Separate tools for tabs, actions, screenshots, and debugging | One consistent MCP toolset for the complete browser workflow |
-| Hard to understand why an action failed | Console, network, cookies, storage, and page errors through DevTools |
-| Agent activity is difficult to follow | A live Viewer for watching, switching, scrolling, and closing tabs |
+<p align="center"><sub>No installer. Download, open, and browse.</sub></p>
 
 ## Run
 
@@ -36,9 +24,7 @@ Browzen turns a fully rendered page into compact, structured context that an AI 
 .\Browzen.exe
 ```
 
-Viewer: [http://127.0.0.1:7023/](http://127.0.0.1:7023/)
-
-MCP: `http://127.0.0.1:7023/mcp`
+Use `Ctrl+T` for a new tab, `Ctrl+L` for the address bar, and `F12` for Developer Tools.
 
 Only the ready-to-run Windows executable is distributed in this repository.
 

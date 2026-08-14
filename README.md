@@ -6,7 +6,7 @@
 
 <p align="center">
   Browzen gives AI agents a real local Chromium browser with multi-tab control, structured interaction, screenshots, and DevTools through MCP.<br>
-  Humans can watch, switch tabs, and scroll safely in the live read-only Viewer.<br>
+  Humans can watch, switch, scroll, and close tabs safely in the live Viewer.<br>
   Everything stays on your computer and listens on <code>127.0.0.1:7023</code> by default.
 </p>
 
@@ -18,16 +18,17 @@
 
 <p align="center"><sub>No installer. No cloud account. Just download and run.</sub></p>
 
-## Why Browzen?
+## Why agents work better with Browzen
 
-Many agent browsers run remotely or hide the browser behind automation APIs. Browzen runs a real Chromium browser locally, renders full JavaScript and CSS, and gives you a live Viewer while the agent works.
+Browzen turns a fully rendered page into compact, structured context that an AI can understand and act on directly. Agents spend less context on noisy HTML, avoid brittle selector guessing, and recover safely when a page changes—all while you can watch their work locally.
 
-| Typical agent browser | Browzen |
+| Typical agent browsing | With Browzen |
 | --- | --- |
-| Remote or hidden browser session | Real Chromium running on your computer |
-| Limited visibility into agent activity | Live Viewer with tab switching, scrolling, and safe tab closing |
-| Browser data may leave the device | Localhost-only by default |
-| Automation-first debugging | Structured page view, screenshots, console, network, cookies, storage, and errors |
+| Raw HTML, large DOM trees, or screenshots alone | Agent-friendly Markdown plus optional structured JSON |
+| Fragile CSS selectors and coordinate guessing | Short element IDs with stale-element detection |
+| Separate tools for tabs, actions, screenshots, and debugging | One consistent MCP toolset for the complete browser workflow |
+| Hard to understand why an action failed | Console, network, cookies, storage, and page errors through DevTools |
+| Agent activity is difficult to follow | A live Viewer for watching, switching, scrolling, and closing tabs |
 
 ## Run
 

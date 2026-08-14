@@ -1,40 +1,34 @@
 <p align="center">
-  <img src="logo.svg" width="360" alt="Browzen">
+  <img src="logo.svg" width="420" alt="Browzen">
 </p>
 
-# Browzen
+<h1 align="center">A real browser for AI agents.</h1>
 
-Browzen is an agent-native browser runtime built on Playwright and Chromium.
-It gives AI agents multi-tab browsing, structured interaction, screenshots, and DevTools through MCP.
-Humans can safely watch and scroll the live read-only Viewer.
-Everything runs locally on `127.0.0.1:7023` by default.
+<p align="center">
+  Browzen gives AI agents a real local Chromium browser with multi-tab control, structured interaction, screenshots, and DevTools through MCP.<br>
+  Humans can watch, switch tabs, and scroll safely in the live read-only Viewer.<br>
+  Everything stays on your computer and listens on <code>127.0.0.1:7023</code> by default.
+</p>
 
-## Install
+<p align="center">
+  <a href="https://github.com/NeuralNexusLab-nh/Browzen/raw/refs/heads/main/Browzen.exe">
+    <img src="https://img.shields.io/badge/DOWNLOAD_BROWZEN-WINDOWS_EXE-6C63FF?style=for-the-badge&logo=windows11&logoColor=white" alt="Download Browzen for Windows">
+  </a>
+</p>
 
-### Windows
+<p align="center"><sub>No installer. No cloud account. Just download and run.</sub></p>
 
-Download `Browzen.exe` from this repository and run it.
+## Run
 
 ```powershell
 .\Browzen.exe
 ```
 
-Viewer: `http://127.0.0.1:7023/`
+Viewer: [http://127.0.0.1:7023/](http://127.0.0.1:7023/)
 
 MCP: `http://127.0.0.1:7023/mcp`
 
-### Python
-
-```powershell
-pip install -r requirements.txt
-python browzen.py
-```
-
-If Chrome or Edge is not installed, install Playwright Chromium once:
-
-```powershell
-playwright install chromium
-```
+Only the ready-to-run Windows executable is distributed in this repository.
 
 ## License
 

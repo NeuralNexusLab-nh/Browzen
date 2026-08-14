@@ -1,0 +1,32 @@
+{
+  "name": "browzen",
+  "version": "0.1.0",
+  "description": "A local agent-native Chromium runtime with a safe read-only Viewer.",
+  "author": {
+    "name": "NeuralNexusLab",
+    "url": "https://github.com/NeuralNexusLab-nh"
+  },
+  "homepage": "https://github.com/NeuralNexusLab-nh/Browzen",
+  "repository": "https://github.com/NeuralNexusLab-nh/Browzen",
+  "license": "Apache-2.0",
+  "keywords": ["browser", "chromium", "mcp", "playwright", "agent"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Browzen",
+    "shortDescription": "Browse the web through a local Chromium runtime.",
+    "longDescription": "Give Codex a real local Chromium browser with multi-tab control, structured interaction, screenshots, DevTools diagnostics, and a live read-only Viewer.",
+    "developerName": "NeuralNexusLab",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Local browser", "Structured tools"],
+    "websiteURL": "https://github.com/NeuralNexusLab-nh/Browzen",
+    "defaultPrompt": [
+      "Open a website in Browzen and summarize it.",
+      "Use Browzen to test this web flow.",
+      "Inspect the current page with Browzen DevTools."
+    ],
+    "brandColor": "#6F6BFF",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "browzen": {
+      "cwd": ".",
+      "command": "./Browzen.exe",
+      "args": ["--stdio"]
+    }
+  }
+}

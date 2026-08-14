@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import contextlib
 import os
+import socket
 import sys
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
@@ -84,6 +85,7 @@ class BrowzenRuntime:
         )
         self.counter = 0
         self.browser_name = ""
+        self.viewer_port = DEFAULT_PORT
         self.lock = asyncio.Lock()
 
     async def start(self) -> None:
@@ -307,7 +309,11 @@ mcp = FastMCP(
 
 @mcp.tool(description="List all live browser tabs and their short IDs.")
 async def browzen_tabs() -> dict[str, Any]:
-    return {"tabs": await runtime.tab_list(), "browser": runtime.browser_name}
+    return {
+        "tabs": await runtime.tab_list(),
+        "browser": runtime.browser_name,
+        "viewer": f"http://{HOST}:{runtime.viewer_port}/",
+    }
 
 
 @mcp.tool(description="Open a new tab, optionally navigating it to a URL.")
@@ -405,11 +411,11 @@ header{display:flex;align-items:center;gap:14px;padding:0 18px;background:#11151
 #tabs{display:flex;gap:6px;min-width:0;overflow:auto;flex:1}.tab{border:1px solid #293142;background:#181e29;color:#aeb8c8;border-radius:7px;padding:7px 11px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}.tab.active{background:#273248;color:white;border-color:#49618d}
 main{position:relative;display:grid;place-items:center;background:#080a0e;overflow:hidden}.frame{max-width:100%;max-height:100%;object-fit:contain;box-shadow:0 0 0 1px #28303e;user-select:none}.empty{color:#778297}.hint{position:absolute;right:14px;bottom:12px;background:#111722dd;border:1px solid #2a3548;border-radius:7px;padding:7px 10px;font-size:12px;color:#9eabc0;pointer-events:none}
 </style></head><body><header><div class="brand">Browzen</div><div id="tabs"></div><div class="status"><span class="dot"></span>Read-only Viewer</div></header>
-<main id="stage"><div class="empty">Waiting for a browser tab...</div><div class="hint">Switch tabs above · Scroll with mouse wheel</div></main>
+<main id="stage"><div class="empty">Waiting for a browser tab...</div><div class="hint">Switch tabs above - Scroll with mouse wheel</div></main>
 <script>
 let selected=null, busy=false, serial=0;
 async function tabs(){try{const d=await (await fetch('/api/tabs')).json();if(!selected||!d.tabs.some(t=>t.id===selected))selected=d.tabs[0]?.id||null;
-document.querySelector('#tabs').innerHTML=d.tabs.map(t=>`<button class="tab ${t.id===selected?'active':''}" data-id="${t.id}" title="${escapeHtml(t.url)}">${escapeHtml(t.id+' · '+(t.title||'Untitled'))}</button>`).join('');
+document.querySelector('#tabs').innerHTML=d.tabs.map(t=>`<button class="tab ${t.id===selected?'active':''}" data-id="${t.id}" title="${escapeHtml(t.url)}">${escapeHtml(t.id+' - '+(t.title||'Untitled'))}</button>`).join('');
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{selected=b.dataset.id;serial++;tabs();frame()});}catch(e){}}
 function frame(){const stage=document.querySelector('#stage');if(!selected)return;let img=stage.querySelector('img');if(!img){stage.querySelector('.empty')?.remove();img=document.createElement('img');img.className='frame';img.draggable=false;stage.prepend(img)}img.src=`/api/frame/${selected}.png?v=${Date.now()}-${serial}`}
 document.querySelector('#stage').addEventListener('wheel',async e=>{e.preventDefault();if(!selected||busy)return;busy=true;try{await fetch(`/api/scroll/${selected}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({dx:e.deltaX,dy:e.deltaY})});serial++;frame()}finally{setTimeout(()=>busy=false,80)}},{passive:false});
@@ -469,16 +475,78 @@ def create_app() -> Starlette:
     )
 
 
+def create_viewer_app() -> Starlette:
+    """Viewer-only app used while MCP communicates over stdio."""
+    return Starlette(
+        routes=[
+            Route("/", viewer),
+            Route("/api/tabs", viewer_tabs),
+            Route("/api/frame/{tab_id}.png", viewer_frame),
+            Route("/api/scroll/{tab_id}", viewer_scroll, methods=["POST"]),
+        ],
+        middleware=[Middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])],
+    )
+
+
 app = create_app()
+
+
+async def run_stdio_mode(port: int) -> None:
+    """Run MCP on stdio while keeping the human Viewer on localhost."""
+    viewer_port = available_port(port)
+    runtime.viewer_port = viewer_port
+    await runtime.start()
+    server = uvicorn.Server(
+        uvicorn.Config(create_viewer_app(), host=HOST, port=viewer_port, log_level="warning", access_log=False)
+    )
+    viewer_task = asyncio.create_task(server.serve())
+    try:
+        for _ in range(200):
+            if server.started:
+                break
+            if viewer_task.done():
+                raise RuntimeError(f"Viewer could not start on {HOST}:{viewer_port}")
+            await asyncio.sleep(0.01)
+        else:
+            raise RuntimeError(f"Viewer timed out while starting on {HOST}:{viewer_port}")
+        if viewer_port != port:
+            print(f"Port {port} is in use; Viewer moved to http://{HOST}:{viewer_port}/", file=sys.stderr)
+        else:
+            print(f"Browzen {VERSION} plugin mode - Viewer http://{HOST}:{viewer_port}/", file=sys.stderr)
+        await mcp.run_stdio_async()
+    finally:
+        server.should_exit = True
+        with contextlib.suppress(Exception):
+            await viewer_task
+        await runtime.stop()
+
+
+def available_port(preferred: int) -> int:
+    """Return the preferred localhost port or the next available one."""
+    for port in range(preferred, min(preferred + 20, 65_536)):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            try:
+                probe.bind((HOST, port))
+            except OSError:
+                continue
+            return port
+    raise RuntimeError(f"No available Viewer port found near {preferred}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Browzen agent-native browser runtime")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"localhost port (default: {DEFAULT_PORT})")
+    parser.add_argument("--stdio", action="store_true", help="run MCP over stdio for plugin hosts")
     parser.add_argument("--version", action="version", version=f"Browzen {VERSION}")
     args = parser.parse_args()
-    print(f"Browzen {VERSION}\nViewer  http://{HOST}:{args.port}/\nMCP     http://{HOST}:{args.port}/mcp")
-    uvicorn.run(app, host=HOST, port=args.port, log_level="info")
+    if args.stdio:
+        asyncio.run(run_stdio_mode(args.port))
+        # The MCP stdio transport owns and closes stdout. Avoid PyInstaller's
+        # interpreter shutdown trying to flush that closed stream.
+        os._exit(0)
+    else:
+        print(f"Browzen {VERSION}\nViewer  http://{HOST}:{args.port}/\nMCP     http://{HOST}:{args.port}/mcp")
+        uvicorn.run(app, host=HOST, port=args.port, log_level="info")
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://media.githubusercontent.com/media/NeuralNexusLab-nh/Browzen/main/Browzen.exe">
+  <a href="https://drive.proton.me/urls/1PN992A7TM#pVkqOKpmCSsZ">
     <img src="https://img.shields.io/badge/DOWNLOAD_BROWZEN-WINDOWS_EXE-536DFE?style=for-the-badge&logo=windows11&logoColor=white" alt="Download Browzen for Windows">
   </a>
 </p>

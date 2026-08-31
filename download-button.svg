@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="112" viewBox="0 0 760 112" role="img" aria-label="Download Browzen for Windows">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#7487ff"/><stop offset=".48" stop-color="#536dfe"/><stop offset="1" stop-color="#7c3aed"/></linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff" stop-opacity=".28"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <filter id="glow" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect x="10" y="13" width="740" height="86" rx="22" fill="#536dfe" opacity=".34" filter="url(#glow)"/>
+  <rect x="8" y="8" width="744" height="88" rx="22" fill="url(#bg)" stroke="#aeb9ff" stroke-width="2"/>
+  <path d="M30 10h700a20 20 0 0 1 20 20v15H10V30A20 20 0 0 1 30 10Z" fill="url(#shine)"/>
+  <g transform="translate(45 30)" fill="#fff"><rect width="23" height="23" rx="2"/><rect x="27" width="23" height="23" rx="2"/><rect y="27" width="23" height="23" rx="2"/><rect x="27" y="27" width="23" height="23" rx="2"/></g>
+  <text x="120" y="48" fill="#fff" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" letter-spacing="2">BROWZEN FOR WINDOWS</text>
+  <text x="120" y="77" fill="#fff" font-family="Segoe UI,Arial,sans-serif" font-size="25" font-weight="800">Download Browzen</text>
+  <path d="M697 42v22m-10-10 10 10 10-10m-22 21h24" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

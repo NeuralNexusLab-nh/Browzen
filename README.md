@@ -14,11 +14,19 @@
 
 <p align="center">
   <a href="https://drive.proton.me/urls/1PN992A7TM#pVkqOKpmCSsZ">
-    <img src="https://img.shields.io/badge/DOWNLOAD_BROWZEN-WINDOWS_EXE-536DFE?style=for-the-badge&logo=windows11&logoColor=white" alt="Download Browzen for Windows">
+    <img src="download-button.svg" width="560" alt="Download Browzen for Windows">
   </a>
 </p>
 
 <p align="center"><sub>No installer. Download, open, and browse.</sub></p>
+
+## Browzen Dark Network
+
+<p align="center">
+  <a href="BrowzenDarkNetwork.md">
+    <img src="dark-network-button.svg" width="560" alt="Explore Browzen Dark Network">
+  </a>
+</p>
 
 ## Why we made Browzen
 
@@ -48,7 +56,7 @@ Browzen is created by [NeuralNexusLab](https://nxlabtw.com).
 
 Use `Ctrl+T` for a new tab, `Ctrl+Shift+N` for Incognito, `Ctrl+L` for the address bar, `Ctrl+H` for History, and `F12` for Developer Tools.
 
-Only the ready-to-run Windows executable is distributed in this repository.
+The Windows executable is provided through the download button above and is not stored in this repository.
 
 ## License
 

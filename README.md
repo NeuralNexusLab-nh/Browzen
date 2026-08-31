@@ -20,14 +20,6 @@
 
 <p align="center"><sub>No installer. Download, open, and browse.</sub></p>
 
-## Browzen Dark Network
-
-<p align="center">
-  <a href="BrowzenDarkNetwork.md">
-    <img src="dark-network-button.svg" width="560" alt="Explore Browzen Dark Network">
-  </a>
-</p>
-
 ## Why we made Browzen
 
 We wanted a browser that is easy to carry, simple to understand, and respectful of the person using it—without requiring an installer, Browzen account, telemetry service, or cloud sync.

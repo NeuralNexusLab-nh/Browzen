@@ -34,11 +34,11 @@ Browzen sends no Browzen telemetry and uses no Browzen cloud sync. Browsing data
 
 ## Responsible use
 
-Use Browzen only in compliance with applicable laws and third-party rights. You are responsible for your activity. Browzen is provided “as is,” without warranties. To the maximum extent permitted by law, NeuralNexusLab and contributors are not liable for loss, damage, data loss, or claims arising from its use.
+Use Browzen only in compliance with applicable laws and third-party rights. You are responsible for your activity. Browzen is provided “as is,” without warranties. To the maximum extent permitted by law, NXLabTW and contributors are not liable for loss, damage, data loss, or claims arising from its use.
 
-## Made by NeuralNexusLab
+## Made by NXLabTW
 
-Browzen is created by [NeuralNexusLab](https://nxlabtw.com).
+Browzen is created by [NXLabTW](https://nxlabtw.com).
 
 ## Run
 

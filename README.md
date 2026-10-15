@@ -4,11 +4,11 @@
 
 <h1 align="center">Browzen</h1>
 
-<h2 align="center"><strong>Browse by Browzen, private by design.</strong></h2>
+<h2 align="center"><strong>Private routes. Clear control.</strong></h2>
 
 <p align="center">
-  Browzen is a portable Windows browser built on real Chromium rendering.<br>
-  Browse with familiar tabs, DevTools, screenshots, Incognito, favorites, history, and modern website support.<br>
+  Browzen is a portable, Tor-powered Windows browser built on real Chromium rendering.<br>
+  Private routing, .onion support, circuit controls, familiar tabs, DevTools, and modern website support—all in one movable EXE.<br>
   No installer, Browzen account, telemetry service, or cloud sync is required.
 </p>
 
@@ -22,15 +22,19 @@
 
 ## Why we made Browzen
 
-We wanted a browser that is easy to carry, simple to understand, and respectful of the person using it—without requiring an installer, Browzen account, telemetry service, or cloud sync.
+We wanted a browser that is easy to carry, simple to understand, and respectful of the person using it—without requiring an installer, Browzen account, telemetry service, or cloud sync. Privacy should be a visible default, not a buried option.
 
 ## How Browzen is different
 
-Browzen is a single movable executable. Run it from a folder or USB drive while its profile remains safely in your Windows user folder. Its interface keeps the essential tools of a general-purpose Chromium browser without tying browsing data to a vendor account.
+Browzen is a single movable executable. Run it from a folder or USB drive. Tor mode routes browser traffic through Tor, supports `.onion` sites, shows the active relay route, and provides new-identity and bridge controls. If Tor is unavailable, Browzen does not silently fall back to a direct connection.
 
 ## Privacy
 
-Browzen sends no Browzen telemetry and uses no Browzen cloud sync. Browsing data stays on this device and is protected inside an encrypted local vault after Browzen closes normally. Incognito data is memory-only. While Browzen is running, the unlocked profile exists locally so Chromium can use it; an unclean shutdown may leave recovery data until Browzen closes cleanly.
+Browzen sends no Browzen telemetry and uses no Browzen cloud sync. Tor browsing uses a private in-memory profile, while normal browsing data remains on this device in an encrypted local vault after a normal close. The browser never substitutes a direct connection when Tor is unavailable.
+
+## Security boundaries
+
+Tor protects network privacy; it does not make an identity magically anonymous. Signing in, sharing identifying information, or trusting a malicious site can still identify you. Browzen is not affiliated with the Tor Project and does not replace Tor Browser's complete anti-fingerprinting protections.
 
 ## Responsible use
 

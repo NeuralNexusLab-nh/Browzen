@@ -36,7 +36,7 @@ Search settings offer DuckDuckGo (default), DuckDuckGo .onion, Google, Bing (Mic
 ## Security built in
 
 - Tor-only browser routing by default, with no automatic direct fallback. Bridge controls support bundled obfs4 and Snowflake transports.
-- Separate memory-only browser profiles for Tor tabs. Third-party cookies are blocked, and **New identity** closes website tabs and replaces their profiles, including site storage.
+- Separate memory-only profiles for manually opened Tor tabs. Website-opened tabs share their opener's temporary profile for links and sign-in flows; unsolicited popups are blocked. Third-party cookies are blocked, and **New identity** closes website tabs and replaces all profiles, including site storage.
 - Engine-level Canvas readback blocking, viewport letterboxing, reduced language variation, disabled DNS prefetch and hyperlink auditing, and WebRTC UDP restrictions.
 - Camera, microphone and location blocked by default; optional per-request prompts. Clipboard APIs, plugins, automatic media playback and external protocol launches are restricted.
 - **Standard**, **Safer**, and **Safest** content settings. Higher levels disable more scripts and graphics; Settings explains the exact behavior.

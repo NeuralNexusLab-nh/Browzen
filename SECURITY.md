@@ -24,10 +24,16 @@ rules apply to an HTML `meta http-equiv="onion-location"` announcement.
 
 ## Website isolation and content protection
 
-Tor tabs have separate off-the-record Chromium profiles, including cookies,
-localStorage, IndexedDB, service workers and caches. Logins therefore do not
-automatically carry between tabs. The isolation boundary is a tab, not a first
-party: navigating between sites within one tab uses that tab's private profile.
+Manually opened Tor tabs have separate off-the-record Chromium profiles,
+including cookies, localStorage, IndexedDB, service workers and caches.
+Website-opened tabs reuse their opener's temporary profile, preserving native
+`window.open`, delayed navigation and sign-in flows. These related tabs can share
+logins and site storage; independent manually opened tabs do not. The isolation
+boundary is a browsing group, not a first party: navigating between sites within
+one group uses the same private profile. The profile is released after its last
+page closes. Unsolicited popups are blocked; mouse- or keyboard-initiated new-window
+requests are allowed. Normal Chromium same-origin and opener protections remain
+in effect.
 New identity closes website tabs and replaces the private profiles, then requests
 Tor's NEWNYM signal. Tor may rate-limit rapid identity requests.
 

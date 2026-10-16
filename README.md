@@ -29,7 +29,9 @@ We wanted security controls to be part of everyday browsing: a visible Tor conne
 
 Browzen is a single movable executable you can run from a folder or USB drive. A Tor connection screen establishes the network before opening the browser. Tor Route displays the relays for a confirmed connection, with country flags, Guard and Exit labels, and the destination. Onion connections show the client-side rendezvous point instead of an exit relay.
 
-Sites advertising a valid `Onion-Location` over HTTPS get a clickable **.onion available** button. The address bar and New Tab both use DuckDuckGo. The interface includes animated tab transitions, smooth scrolling, dark and light themes, and reduced-motion controls.
+Sites advertising a valid `Onion-Location` over HTTPS get a clickable **.onion available** button. Tor Route opened from Settings uses the recent website and lets you select another open destination.
+
+Search settings offer DuckDuckGo (default), DuckDuckGo .onion, Google, Bing (Microsoft Edge), Brave, Yandex, Yahoo, Startpage, Baidu and 360 Search. Your selection is saved and applies to both the address bar and New Tab. The interface includes animated tab transitions, smooth scrolling, dark and light themes, and reduced-motion controls.
 
 ## Security built in
 

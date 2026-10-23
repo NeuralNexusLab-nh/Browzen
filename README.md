@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="logo.svg" width="520" alt="Browzen">
+  <img src="logo.svg" width="128" alt="Browzen logo">
 </p>
 
-<h1 align="center">Browzen</h1>
+# Browzen
 
-<h2 align="center"><strong>Beyond the surface. In control.</strong></h2>
+**Beyond the surface. In control.**
 
 <p align="center">
   Browzen is a security-focused, Tor-powered Windows browser built on real Chromium rendering.<br>
   Connect before browsing, explore .onion services, inspect your route, and choose the protection level you need.<br>
-  Modern animated tabs, DuckDuckGo search, DevTools, and area screenshots—all in one movable EXE.<br>
+  Modern animated tabs, DuckDuckGo .onion search, DevTools, and area screenshots—all in one movable EXE.<br>
   No installer, Browzen account, telemetry service, or cloud sync is required.
 </p>
 
@@ -31,7 +31,7 @@ Browzen is a single movable executable you can run from a folder or USB drive. A
 
 Sites advertising a valid `Onion-Location` over HTTPS get a clickable **.onion available** button. Tor Route opened from Settings uses the recent website and lets you select another open destination.
 
-Search settings offer DuckDuckGo (default), DuckDuckGo .onion, Google, Bing (Microsoft Edge), Brave, Yandex, Yahoo, Startpage, Baidu and 360 Search. Your selection applies to both the address bar and New Tab for this session only. The interface includes animated tab transitions, smooth scrolling, dark and light themes, and reduced-motion controls. Each launch starts in a non-maximized window with viewport letterboxing enabled.
+Search-engine selectors sit to the left of the address bar and the New Tab search input, and stay in sync without clearing what you typed. DuckDuckGo .onion is the default; DuckDuckGo, Google, Bing (Microsoft Edge), Brave, Yandex, Yahoo, Startpage, Baidu and 360 Search are also available. Your selection lasts for this session only. The interface includes animated tab transitions, smooth scrolling, dark and light themes, and reduced-motion controls. Each launch starts in a non-maximized window with viewport letterboxing enabled.
 
 **New circuit for this site** retires confirmed destination circuits, including linked Conflux paths, and reloads matching tabs without clearing logins. **New identity** separately closes website tabs and replaces their private profiles. Destination-host isolation is not Tor Browser's full first-party isolation.
 

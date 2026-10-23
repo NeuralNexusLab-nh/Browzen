@@ -31,21 +31,25 @@ Browzen is a single movable executable you can run from a folder or USB drive. A
 
 Sites advertising a valid `Onion-Location` over HTTPS get a clickable **.onion available** button. Tor Route opened from Settings uses the recent website and lets you select another open destination.
 
-Search settings offer DuckDuckGo (default), DuckDuckGo .onion, Google, Bing (Microsoft Edge), Brave, Yandex, Yahoo, Startpage, Baidu and 360 Search. Your selection is saved and applies to both the address bar and New Tab. The interface includes animated tab transitions, smooth scrolling, dark and light themes, and reduced-motion controls.
+Search settings offer DuckDuckGo (default), DuckDuckGo .onion, Google, Bing (Microsoft Edge), Brave, Yandex, Yahoo, Startpage, Baidu and 360 Search. Your selection applies to both the address bar and New Tab for this session only. The interface includes animated tab transitions, smooth scrolling, dark and light themes, and reduced-motion controls. Each launch starts in a non-maximized window with viewport letterboxing enabled.
+
+**New circuit for this site** retires confirmed destination circuits, including linked Conflux paths, and reloads matching tabs without clearing logins. **New identity** separately closes website tabs and replaces their private profiles. Destination-host isolation is not Tor Browser's full first-party isolation.
 
 ## Security built in
 
 - Tor-only browser routing by default, with no automatic direct fallback. Bridge controls support bundled obfs4 and Snowflake transports.
 - Separate memory-only profiles for manually opened Tor tabs. Website-opened tabs share their opener's temporary profile for links and sign-in flows; unsolicited popups are blocked. Third-party cookies are blocked, and **New identity** closes website tabs and replaces all profiles, including site storage.
-- Engine-level Canvas readback blocking, viewport letterboxing, reduced language variation, disabled DNS prefetch and hyperlink auditing, and WebRTC UDP restrictions.
+- Engine-level Canvas readback and WebGL blocking, disabled Local Font Access API, viewport letterboxing, reduced language variation, disabled DNS prefetch and hyperlink auditing, and WebRTC UDP restrictions.
 - Camera, microphone and location blocked by default; optional per-request prompts. Clipboard APIs, plugins, automatic media playback and external protocol launches are restricted.
 - **Standard**, **Safer**, and **Safest** content settings. Higher levels disable more scripts and graphics; Settings explains the exact behavior.
 
-Tor browsing history and website storage are not persisted by Browzen. Preferences and encrypted Tor network metadata do persist: stable guards and cached directory information improve reconnecting without retaining visited websites. The executable can move; Windows protects that network cache for the same user account.
+Preferences, bridge settings and website state are session-only. Browzen does not read or create `~/Browzen`, restore an old profile, or maintain a vault, backup or reusable Tor cache. Engine and Tor working files are temporary and removed on a normal close. The EXE is movable without companion profile files. Explicitly exported screenshots/pages are files you choose to keep.
+
+This is not zero-trace computing: the one-file EXE extracts runtime files while running, and a crash, Windows paging, driver caches or operating-system records may retain traces. Old-version data is not silently imported. Forgetting Tor guard state on exit also gives up Tor Browser's stable-guard strategy and makes startup slower; no persistence is a tradeoff, not a claim of stronger anonymity.
 
 ## Security boundaries
 
-Browzen implements concrete defenses in Chromium; it does not include all of Tor Browser's Firefox engine patches or its full first-party circuit isolation. Window letterboxing and blocked Canvas readback do not eliminate fingerprinting. See [Security design and current limits](SECURITY.md) for the implemented protections, stored data, and remaining differences.
+Browzen implements concrete defenses in Chromium; it does not include all of Tor Browser's Firefox engine patches or its full first-party circuit isolation. Window letterboxing and blocked Canvas readback do not eliminate fingerprinting. With website scripts enabled, timezone, hardware, screen properties, audio and font metrics remain relevant. **Browzen is not fingerprint-free or verified equivalent to Tor Browser.** See [Security design and current limits](SECURITY.md) and [privacy test results](PRIVACY_TESTS.md).
 
 ## Responsible use
 

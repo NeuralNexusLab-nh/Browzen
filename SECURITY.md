@@ -13,9 +13,18 @@ disabled, and WebRTC is restricted from using non-proxied UDP.
 Route queries run in background workers. Tor STREAM events associate destination
 hosts with actual circuit IDs; a generic prebuilt circuit is not presented as the
 page's route. An expired or unconfirmed circuit is shown as unavailable. Circuit
-information describes a last confirmed connection, not every simultaneous
+information describes a last confirmed connection branch, not every simultaneous
 subresource connection. Onion routes show the client side and rendezvous point;
 the service-side guards and its server IP are not exposed by Tor.
+
+The SOCKS listener uses `IsolateDestAddr`: different destination hosts do not
+share circuits. This is destination-host isolation, not Tor Browser's first-party
+isolation (where third-party requests are keyed by the top-level site).
+**New circuit for this site** closes confirmed three-hop circuits for the chosen
+destination and reloads matching tabs. Linked Conflux legs are retired together;
+Tor selects replacement paths. Cookies, storage and logins are not reset. This
+does not issue a global NEWNYM signal, guarantee a new exit IP, or change guards
+on demand. Unknown routes produce an error rather than a false success.
 
 `Onion-Location` is accepted only from a non-onion HTTPS page. The advertised
 target must use HTTP or HTTPS and contain a valid v3 onion address. Browzen
@@ -37,17 +46,19 @@ in effect.
 New identity closes website tabs and replaces the private profiles, then requests
 Tor's NEWNYM signal. Tor may rate-limit rapid identity requests.
 
-All Tor levels block third-party cookies and Canvas readback, restrict WebRTC
+All Tor levels block third-party cookies, Canvas readback and WebGL, restrict WebRTC
 UDP, disable DNS prefetch and hyperlink auditing, and require a user gesture for
 media playback. Device permissions are blocked by default. Clipboard access,
 browser plugins and external protocol launches are disabled. Letterboxing rounds
 the actual website viewport in 200-by-100 pixel steps by default; it does not
-spoof every screen property. HTTP public-web requests are upgraded to HTTPS.
+spoof every screen property. The Local Font Access API is disabled; this does
+not stop CSS/font-metric enumeration. Launches use a non-maximized window rather
+than restoring geometry from disk. HTTP public-web requests are upgraded to HTTPS.
 HTTP onion services remain supported over Tor's encrypted onion connection.
 
 | Level | Website JavaScript | WebGL | Built-in PDF viewer |
 | --- | --- | --- | --- |
-| Standard | Enabled | Enabled | Enabled |
+| Standard | Enabled | Disabled | Enabled |
 | Safer | HTTPS pages only | Disabled | Enabled |
 | Safest | Disabled | Disabled | Disabled |
 
@@ -55,35 +66,46 @@ Internal Browzen settings remain functional at every level. Levels are modeled
 after Tor Browser's approach, but do not reproduce all of its font, media,
 NoScript and Firefox settings. More restrictive levels can break websites.
 
-## What remains on disk
+## No reusable application data
 
-Browzen does not persist Tor website profiles or browsing history. Profiles and
-HTTP caches are in memory. Tor's working directory is temporary and removed on a
-normal close. This is application cleanup, not a secure-erasure guarantee:
-operating-system paging, crash dumps or an interrupted shutdown may retain traces.
+Preferences, window geometry and bridge configuration live in process memory.
+Every Chromium profile is off the record, with memory HTTP cache and no persistent
+cookies or permissions. Any engine working paths are redirected into a unique
+temporary session directory. Qt shader/pipeline and QML disk caches are disabled.
 
-The following do persist in the Windows user's `Browzen` folder:
+Browzen no longer reads or creates `~/Browzen`, migrates old profiles, restores
+vaults, creates backups, or saves Tor state/cache for another launch. The legacy
+direct/persistent mode is removed; `--direct` cannot bypass Tor. Bridge changes
+reconnect Tor within the current session and are forgotten on exit.
 
-- Appearance, protection preferences, bridge configuration and window geometry.
-- Tor guard state and directory/microdescriptor cache, encrypted with Windows
-  DPAPI. Only an allowlist of Tor metadata files is included; browsing streams,
-  cookies, website databases and logs are not included.
-- Existing data from older Browzen versions is not silently deleted. The explicit
-  `--direct` legacy mode still uses its local encrypted browser vault.
+Tor requires temporary configuration, authentication, guard and directory files
+while running. The one-file EXE also extracts bundled runtime components.
+On a normal close, browser pages/profiles are destroyed, Tor stops, and the
+temporary session directory is removed without a backup. Cleanup failures are
+reported rather than described as successful erasure. Previously installed
+versions may have left data that requires separate removal; it is not imported.
+Explicit screenshot/page exports remain where the user chooses to save them.
 
-Stable guards are deliberately retained, following Tor's guard design. Cached
-network information can reduce repeated bootstrap work; network conditions still
-determine connection speed. DPAPI protection follows the Windows user account,
-not the location of the EXE, and is not a defense against malware running as that
-same user. Bridge settings are local configuration, not an encrypted secret vault.
-Downloads remain disabled in Tor mode; explicitly saved screenshots are files
-the user chooses to keep.
+This is **not** a no-write or secure-erasure guarantee. A forced kill, crash,
+power loss, OS paging, dumps, filesystem journals, Windows execution records or
+GPU-driver caches can retain traces outside application control. An ordinary
+Windows EXE cannot guarantee absence of forensic evidence.
+
+Not retaining Tor guard metadata is an explicit no-persistence tradeoff. Official
+Tor Browser deliberately preserves stable guards to limit exposure to new entry
+relays. Starting fresh every time loses that strategy and requires a cold Tor
+bootstrap; it is not inherently more anonymous or safer.
 
 ## Current engine limits
 
 Browzen does not implement Tor Browser's complete fingerprint normalization,
 font isolation, timezone treatment, NoScript integration, or per-first-party
-SOCKS credential/circuit isolation. Browser fingerprinting, malicious websites,
+SOCKS credential/circuit isolation. With scripts enabled, Web Audio, CPU/memory
+properties, screen information, timezone, Client Hints and speech/font metrics
+remain observable. Safest disables website scripts but does not make the browser
+indistinguishable from Tor Browser or hide its network/TLS characteristics.
+See [privacy tests](PRIVACY_TESTS.md) for actual results, including failed and
+incomplete checks. Browser fingerprinting, malicious websites,
 account logins, identifying content, compromised endpoints and traffic correlation
 remain relevant. Tor protects routed browser connections, not other applications.
 Neither an IP test nor a successful onion load constitutes an anonymity audit.

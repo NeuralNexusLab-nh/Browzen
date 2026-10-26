@@ -27,9 +27,11 @@ We wanted security controls to be part of everyday browsing: a visible Tor conne
 
 ## How Browzen is different
 
-Browzen is a single movable executable you can run from a folder or USB drive. A Tor connection screen establishes the network before opening the browser. Tor Route displays the relays for a confirmed connection, with country flags, Guard and Exit labels, and the destination. Onion connections show the client-side rendezvous point instead of an exit relay.
+Browzen is a single movable executable you can run from a folder or USB drive. A Tor connection screen establishes the network before opening the browser. The upper-right **Control Panel** combines the confirmed Tor route, a built-in NoScript switch, and site permissions. Routes show country flags, Guard and Exit labels, and the destination. Onion connections show the client-side rendezvous point instead of an exit relay.
 
-Sites advertising a valid `Onion-Location` over HTTPS get a clickable **.onion available** button. Tor Route opened from Settings uses the recent website and lets you select another open destination.
+Sites advertising a valid `Onion-Location` over HTTPS get a clickable **.onion available** button. The Control Panel opened from Settings can show a recent website's route; permission switches are enabled only on website tabs.
+
+NoScript starts off (green, JavaScript allowed); switching it on (red) disables page JavaScript unless a stricter security level already blocks it. This is Browzen's built-in control, not the NoScript extension. Clipboard, microphone, camera, notifications and Canvas readback start blocked. Exceptions apply to the current origin for this session only; device and clipboard access still require a permission prompt, while Canvas readback applies to the page and its embedded frames. Location remains blocked. Loading feedback includes a moving progress rail, tab spinner and elapsed waiting time; the rail is an estimate, not proof of an established Tor circuit.
 
 Search-engine selectors sit to the left of the address bar and the New Tab search input, and stay in sync without clearing what you typed. DuckDuckGo .onion is the default; DuckDuckGo, Google, Bing (Microsoft Edge), Brave, Yandex, Yahoo, Startpage, Baidu and 360 Search are also available. Your selection lasts for this session only. The interface includes animated tab transitions, smooth scrolling, dark and light themes, and reduced-motion controls. Each launch starts in a non-maximized window with viewport letterboxing enabled.
 
@@ -39,8 +41,8 @@ Search-engine selectors sit to the left of the address bar and the New Tab searc
 
 - Tor-only browser routing by default, with no automatic direct fallback. Bridge controls support bundled obfs4 and Snowflake transports.
 - Separate memory-only profiles for manually opened Tor tabs. Website-opened tabs share their opener's temporary profile for links and sign-in flows; unsolicited popups are blocked. Third-party cookies are blocked, and **New identity** closes website tabs and replaces all profiles, including site storage.
-- Engine-level Canvas readback and WebGL blocking, disabled Local Font Access API, viewport letterboxing, reduced language variation, disabled DNS prefetch and hyperlink auditing, and WebRTC UDP restrictions.
-- Camera, microphone and location blocked by default; optional per-request prompts. Clipboard APIs, plugins, automatic media playback and external protocol launches are restricted.
+- Canvas readback blocked by default, WebGL blocking, disabled Local Font Access API, viewport letterboxing, reduced language variation, disabled DNS prefetch and hyperlink auditing, and WebRTC UDP restrictions.
+- Clipboard, camera, microphone and notifications blocked by default, with per-site temporary prompt exceptions. Location stays blocked. Plugins, automatic media playback and external protocol launches are restricted.
 - **Standard**, **Safer**, and **Safest** content settings. Higher levels disable more scripts and graphics; Settings explains the exact behavior.
 
 Preferences, bridge settings and website state are session-only. Browzen does not read or create `~/Browzen`, restore an old profile, or maintain a vault, backup or reusable Tor cache. Engine and Tor working files are temporary and removed on a normal close. The EXE is movable without companion profile files. Explicitly exported screenshots/pages are files you choose to keep.
@@ -65,7 +67,7 @@ Browzen is created by [NXLabTW](https://nxlabtw.com).
 .\Browzen.exe
 ```
 
-Use `Ctrl+T` for a new tab, `Ctrl+L` for the address bar, `Ctrl+Shift+S` for area capture, and `F12` for Developer Tools. Settings controls themes, motion, scrolling, zoom, security levels, permissions, letterboxing and bridges.
+Use `Ctrl+T` for a new tab, `Ctrl+L` for the address bar, `Ctrl+Shift+S` for area capture, and `F12` for Developer Tools. Use Control Panel for site permissions, page scripts and routes. Settings controls themes, motion, scrolling, zoom, security levels, letterboxing and bridges.
 
 The Windows executable is provided through the download button above and is not stored in this repository.
 

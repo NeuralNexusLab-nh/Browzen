@@ -46,10 +46,10 @@ in effect.
 New identity closes website tabs and replaces the private profiles, then requests
 Tor's NEWNYM signal. Tor may rate-limit rapid identity requests.
 
-All Tor levels block third-party cookies, Canvas readback and WebGL, restrict WebRTC
+All Tor levels block third-party cookies and WebGL, restrict WebRTC
 UDP, disable DNS prefetch and hyperlink auditing, and require a user gesture for
-media playback. Device permissions are blocked by default. Clipboard access,
-browser plugins and external protocol launches are disabled. Letterboxing rounds
+media playback. Canvas readback and device permissions are blocked by default.
+Browser plugins and external protocol launches are disabled. Letterboxing rounds
 the actual website viewport in 200-by-100 pixel steps by default; it does not
 spoof every screen property. The Local Font Access API is disabled; this does
 not stop CSS/font-metric enumeration. Launches use a non-maximized window rather
@@ -65,6 +65,19 @@ HTTP onion services remain supported over Tor's encrypted onion connection.
 Internal Browzen settings remain functional at every level. Levels are modeled
 after Tor Browser's approach, but do not reproduce all of its font, media,
 NoScript and Firefox settings. More restrictive levels can break websites.
+
+The anchored Control Panel offers a built-in NoScript switch, not the NoScript
+extension. It disables page JavaScript for the current origin; it cannot override
+a stricter security level. It is not an independently audited all-context script
+or service-worker blocker. The panel also controls clipboard, microphone, camera,
+notifications and Canvas readback. These five start blocked for every origin.
+Enabling a device or clipboard switch allows a native permission prompt, not an
+automatic grant. Requests from other embedded origins, location, screen capture,
+mouse lock and local-font access remain denied. Canvas readback is a page-wide
+engine setting, including embedded frames; enabling it weakens fingerprint
+protection. Controls are reapplied on navigation, reset by New Identity and exit,
+and are never saved to disk. Changing a control reloads matching-origin pages with
+a GET navigation instead of silently resubmitting form data.
 
 ## No reusable application data
 

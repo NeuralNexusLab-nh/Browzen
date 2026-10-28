@@ -1,17 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">Browzen logo</title>
-  <desc id="desc">A browser window with a purple panel, white B and page lines.</desc>
-  <defs>
-    <linearGradient id="frame" x2="0" y2="1"><stop stop-color="#4a5366"/><stop offset="1" stop-color="#242b3a"/></linearGradient>
-    <linearGradient id="panel" x2="1" y2="1"><stop stop-color="#756aff"/><stop offset="1" stop-color="#5946f3"/></linearGradient>
-  </defs>
-  <rect x="8" y="6" width="112" height="116" rx="20" fill="url(#frame)" stroke="#202635" stroke-width="3"/>
-  <rect x="14" y="12" width="100" height="103" rx="14" fill="#f8faff" stroke="#aab3c5" stroke-width="2"/>
-  <path d="M15 37h98" stroke="#c9d2e2" stroke-width="2"/>
-  <circle cx="24" cy="25" r="2.8" fill="#ff758a"/><circle cx="34" cy="25" r="2.8" fill="#ffcb60"/><circle cx="44" cy="25" r="2.8" fill="#56cda5"/>
-  <rect x="55" y="21" width="43" height="8" rx="4" fill="#dce4f1"/>
-  <rect x="24" y="48" width="80" height="48" rx="9" fill="url(#panel)"/>
-  <path fill="#111827" fill-rule="evenodd" d="M35 58h11c6 0 9 3 9 7 0 3-1.5 5-4 6 3.5 1 5 3.5 5 7 0 5-3.5 8-10 8H35V58zm6 5v6h5c2.5 0 3.5-1 3.5-3s-1.2-3-3.5-3h-5zm0 11v7h5c3 0 4-1.3 4-3.5S48.7 74 46 74h-5z"/>
-  <path d="M67 62h25M67 72h25M67 82h16" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-  <path d="M27 105h74" stroke="#dce4f1" stroke-width="3" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <defs><linearGradient id="frame" x1="25" y1="16" x2="231" y2="240" gradientUnits="userSpaceOnUse"><stop stop-color="#d8e7f7"/><stop offset="1" stop-color="#7f91b3"/></linearGradient><linearGradient id="panel" x1="48" y1="87" x2="211" y2="214" gradientUnits="userSpaceOnUse"><stop stop-color="#a69aff"/><stop offset=".6" stop-color="#7867f4"/><stop offset="1" stop-color="#4c69df"/></linearGradient></defs>
+  <rect x="15" y="15" width="226" height="226" rx="48" fill="#111a2b"/>
+  <rect x="22" y="22" width="212" height="212" rx="41" fill="url(#frame)"/>
+  <rect x="29" y="29" width="198" height="198" rx="34" fill="#f4f8ff"/>
+  <path d="M30 71h196" stroke="#d3def0" stroke-width="4"/>
+  <circle cx="49" cy="50" r="5" fill="#fa8195"/><circle cx="66" cy="50" r="5" fill="#fac66e"/><circle cx="83" cy="50" r="5" fill="#4ecbb7"/>
+  <rect x="111" y="44" width="92" height="12" rx="6" fill="#dce5f3"/>
+  <rect x="44" y="88" width="168" height="117" rx="20" fill="url(#panel)"/>
+  <path d="M65 111h27c17 0 27 8 27 21 0 8-4 13-10 16 9 3 14 9 14 19 0 16-12 25-30 25H65v-81Zm17 15v17h10c7 0 11-3 11-9 0-5-4-8-11-8H82Zm0 31v20h12c8 0 12-4 12-10 0-7-4-10-13-10H82Z" fill="#101725"/>
+  <path d="M144 120h47M144 146h47M144 172h31" stroke="#f8fbff" stroke-width="9" stroke-linecap="round"/>
+  <path d="M65 217h126" stroke="#d6e0f1" stroke-width="4" stroke-linecap="round"/>
 </svg>

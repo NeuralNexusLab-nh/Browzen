@@ -7,9 +7,9 @@
 **Beyond the surface. In control.**
 
 <p align="center">
-  Browzen is a security-focused, Tor-powered Windows browser built on real Chromium rendering.<br>
+  Browzen is a security-focused, Tor-powered portable browser.<br>
   Connect before browsing, explore .onion services, inspect your route, and choose the protection level you need.<br>
-  Modern animated tabs, DuckDuckGo .onion search, DevTools, and area screenshots—all in one movable EXE.<br>
+  Modern animated tabs, DuckDuckGo .onion search, DevTools, and area screenshots—in a movable executable.<br>
   No installer, Browzen account, telemetry service, or cloud sync is required.
 </p>
 
@@ -20,6 +20,14 @@
 </p>
 
 <p align="center"><sub>No installer. Open Browzen, connect to Tor, and browse.</sub></p>
+
+<p align="center">
+  <a href="https://drive.proton.me/urls/5S7CX0CRAC#9KbgPA2Mmb9J">
+    <img src="download-linux-button.svg" width="560" alt="Download Browzen for Linux x86_64">
+  </a>
+</p>
+
+<p align="center"><sub>Linux x86_64 · Tested on Debian 13 · <a href="LINUX.md">Compatibility, tests and SHA-256</a></sub></p>
 
 ## Why we made Browzen
 
@@ -63,13 +71,26 @@ Browzen is created by [NXLabTW](https://nxlabtw.com).
 
 ## Run
 
+### Windows
+
 ```powershell
 .\Browzen.exe
 ```
 
+### Linux x86_64
+
+```sh
+chmod +x Browzen-linux-x86_64
+./Browzen-linux-x86_64
+```
+
+The Linux build uses the native Tor Browser engine with Browzen's interface.
+A compatible Linux desktop and system libraries are required; see [Linux details](LINUX.md).
+No macOS build is available yet.
+
 Use `Ctrl+T` for a new tab, `Ctrl+L` for the address bar, `Ctrl+Shift+S` for area capture, and `F12` for Developer Tools. Use Control Panel for site permissions, page scripts and routes. Settings controls themes, motion, scrolling, zoom, security levels, letterboxing and bridges.
 
-The Windows executable is provided through the download button above and is not stored in this repository.
+The Windows and Linux executables are provided through the download buttons above and are not stored in this repository.
 
 ## License
 

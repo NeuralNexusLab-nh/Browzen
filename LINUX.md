@@ -4,8 +4,8 @@ Download the Linux x86_64 executable using the button in the [README](README.md)
 No Python installation is required on the target desktop.
 
 ```sh
-chmod +x Browzen-linux-x86_64
-./Browzen-linux-x86_64
+chmod +x Browzen.bin
+./Browzen.bin
 ```
 
 ## Compatibility
@@ -35,13 +35,13 @@ disabled WebRTC. The packaged executable started Firefox and Tor without test
 automation enabled. Terminating its inner launcher left no observed owned
 processes or new temporary entries. This is not a complete security audit.
 
-SHA-256 of `Browzen-linux-x86_64` (184088280 bytes):
+SHA-256 of `Browzen.bin` (184088280 bytes):
 
 ```text
 9ac75f9a885df80661c41b61e44fd370fe8e32ea0c0262e507becd9d53616367
 ```
 
-Verify the download with `sha256sum Browzen-linux-x86_64`. A matching checksum
+Verify the download with `sha256sum Browzen.bin`. A matching checksum
 checks file identity, not the absence of vulnerabilities. No macOS build is
 available yet. Upstream component licenses remain in the bundled runtime;
 Browzen's own code is Apache-2.0.

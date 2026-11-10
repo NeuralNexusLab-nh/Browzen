@@ -80,8 +80,8 @@ Browzen is created by [NXLabTW](https://nxlabtw.com).
 ### Linux x86_64
 
 ```sh
-chmod +x Browzen-linux-x86_64
-./Browzen-linux-x86_64
+chmod +x Browzen.bin
+./Browzen.bin
 ```
 
 The Linux build uses the native Tor Browser engine with Browzen's interface.

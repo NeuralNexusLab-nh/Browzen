@@ -27,7 +27,7 @@
   </a>
 </p>
 
-<p align="center"><sub>Linux x86_64 · Tested on Debian 13 · <a href="LINUX.md">Compatibility, tests and SHA-256</a></sub></p>
+<p align="center"><sub>Linux x86_64 · Tested on Debian 13</sub></p>
 
 ## Why we made Browzen
 
@@ -59,7 +59,7 @@ This is not zero-trace computing: the one-file EXE extracts runtime files while 
 
 ## Security boundaries
 
-Browzen implements concrete defenses in Chromium; it does not include all of Tor Browser's Firefox engine patches or its full first-party circuit isolation. Window letterboxing and blocked Canvas readback do not eliminate fingerprinting. With website scripts enabled, timezone, hardware, screen properties, audio and font metrics remain relevant. **Browzen is not fingerprint-free or verified equivalent to Tor Browser.** See [Security design and current limits](SECURITY.md) and [privacy test results](PRIVACY_TESTS.md).
+Browzen's protections are not a guarantee of anonymity. Using Tor does not by itself reproduce every Tor Browser protection, and sharing an upstream engine does not establish security equivalence. Fingerprinting, account logins, malicious websites, compromised devices and traffic correlation remain relevant. **Browzen is not fingerprint-free or verified equivalent to Tor Browser.**
 
 ## Responsible use
 
@@ -85,7 +85,7 @@ chmod +x Browzen.bin
 ```
 
 The Linux build uses the native Tor Browser engine with Browzen's interface.
-A compatible Linux desktop and system libraries are required; see [Linux details](LINUX.md).
+A compatible Linux desktop and system libraries are required. The Linux build was tested on Debian 13 x86_64 with glibc 2.41, GTK and X11; older distributions, ARM64 and Wayland-only desktops have not been tested. Do not run it as root. It extracts a temporary runtime while running, so the temporary filesystem must allow execution and have sufficient free space.
 No macOS build is available yet.
 
 Use `Ctrl+T` for a new tab, `Ctrl+L` for the address bar, `Ctrl+Shift+S` for area capture, and `F12` for Developer Tools. Use Control Panel for site permissions, page scripts and routes. Settings controls themes, motion, scrolling, zoom, security levels, letterboxing and bridges.

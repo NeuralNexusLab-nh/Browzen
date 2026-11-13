@@ -6,7 +6,7 @@ const $=s=>document.querySelector(s);
 const WEB_BROWSING_SUSPENDED=false;
 const WEB_SAFETY_NOTICE='Website browsing is paused: a WebRTC IP leak was reported. Protection has not been verified. Do not use this preview for anonymous browsing.';
 if(WEB_BROWSING_SUSPENDED){const safetyBanner=document.createElement('div');safetyBanner.className='security-incident';safetyBanner.role='alert';safetyBanner.textContent=WEB_SAFETY_NOTICE;$('#chrome').after(safetyBanner);}
-$('#engine').remove();document.querySelector('.quicklinks')?.remove();
+$('#engine')?.remove();document.querySelector('.quicklinks')?.remove();
 const tabs=[],records=new Map();let active,sequence=0,requests=0,egress=null,noScript=false,zoom=100,authenticated=false;
 const engines=[['DuckDuckGo','duckduckgo.ico','https://duckduckgo.com/?q='],['Google','google.ico','https://www.google.com/search?q='],['Bing','bing.ico','https://www.bing.com/search?q='],['Brave','brave.ico','https://search.brave.com/search?q='],['Startpage','startpage.ico','https://www.startpage.com/sp/search?query='],['Yahoo','yahoo.ico','https://search.yahoo.com/search?p='],['Yandex','yandex.ico','https://yandex.com/search/?text='],['Baidu','baidu.ico','https://www.baidu.com/s?wd='],['360 Search','360.ico','https://www.so.com/s?q=']];
 let searchEngine=0,securityLevel='standard',lastCleanup='No identity refresh yet.',siteControls;

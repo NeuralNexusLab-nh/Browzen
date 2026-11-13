@@ -3323,7 +3323,7 @@
   (() => {
     const native = { append: Node.prototype.appendChild, insert: Node.prototype.insertBefore, replace: Node.prototype.replaceChild, set: Element.prototype.setAttribute, get: Element.prototype.getAttribute, remove: Element.prototype.removeAttribute, inner: Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML"), add: EventTarget.prototype.addEventListener, dispatch: EventTarget.prototype.dispatchEvent, Blob, create: URL.createObjectURL.bind(URL), revoke: URL.revokeObjectURL.bind(URL), Function };
     window.__browzenPrivacy?.install(window);
-    let port, current, sequence = 0, cookie = "", ready = false, documentInstalled = false;
+    let port, current, sequence = 0, cookie = "", ready = false, documentInstalled = false, readyState = "loading", scriptErrors = 0;
     const pending = /* @__PURE__ */ new Map(), resources = /* @__PURE__ */ new Map(), urls = /* @__PURE__ */ new Map(), internal = /* @__PURE__ */ new WeakSet(), processed = /* @__PURE__ */ new WeakSet(), popups = /* @__PURE__ */ new Map();
     const scope = () => ({ id: current.scope, origin: new URL(current.url).origin, topOrigin: new URL(current.url).origin, isMain: true });
     function send(type, data = {}) {
@@ -3387,19 +3387,57 @@
       urls.set(id, url);
       return url;
     }
+    async function materializeAsync(id, stack = /* @__PURE__ */ new Set()) {
+      if (urls.has(id)) return urls.get(id);
+      const r = resources.get(id);
+      if (!r || r.type !== "text/css") return materialize(id);
+      if (stack.has(id)) return "data:,";
+      const next = /* @__PURE__ */ new Set([...stack, id]), dependencies = r.dependencies || [...new Set([...String(r.body).matchAll(/bzn-resource:(r\d+)/g)].map((m) => m[1]))], mapped = /* @__PURE__ */ new Map();
+      for (const dep of dependencies) mapped.set(dep, await materializeAsync(dep, next));
+      const url = native.create(new native.Blob([String(r.body).replace(/bzn-resource:(r\d+)/g, (_, dep) => mapped.get(dep) || "data:,")], { type: "text/css" }));
+      urls.set(id, url);
+      return url;
+    }
+    const aliasNames = /* @__PURE__ */ new Set();
     function aliases() {
       const imports = {};
-      for (const r of resources.values()) if (r.type === "text/javascript") imports["bzn:" + r.url] = materialize(r.id);
+      for (const r of resources.values()) if (r.module && !aliasNames.has(r.url)) {
+        imports["bzn:" + r.url] = materialize(r.id);
+        aliasNames.add(r.url);
+      }
+      if (!Object.keys(imports).length) return;
       const node = document.createElement("script");
       internal.add(node);
       node.type = "importmap";
       node.textContent = JSON.stringify({ imports });
       native.append.call(document.head, node);
     }
-    async function resource(url, kind = "binary") {
-      const result = await rpc("resource", { url: remote(url), base: current.base, kind });
+    const resourcePending = /* @__PURE__ */ new Map();
+    async function resourceEntry(url, kind = "binary", integrity = "") {
+      const key = kind + ":" + remote(url) + ":" + integrity;
+      if (!resourcePending.has(key)) {
+        const promise = rpc("resource", { url: remote(url), base: current.base, kind, integrity }).then((result) => {
+          addResources(result.resources);
+          return result.id;
+        });
+        resourcePending.set(key, promise);
+        promise.catch(() => resourcePending.delete(key));
+      }
+      return resourcePending.get(key);
+    }
+    async function resource(url, kind = "binary", integrity = "") {
+      return materializeAsync(await resourceEntry(url, kind, integrity));
+    }
+    async function convertCSS(source) {
+      const result = await rpc("css", { source, base: current.base });
       addResources(result.resources);
-      return materialize(result.id);
+      let text = result.css;
+      const ids = [...new Set([...text.matchAll(/bzn-resource:(r\d+)/g)].map((m) => m[1]))];
+      for (const id of ids) {
+        const url = await materializeAsync(id);
+        text = text.replaceAll("bzn-resource:" + id + '"', url + '"').replaceAll("bzn-resource:" + id + "'", url + "'");
+      }
+      return text;
     }
     const locationFacade = {};
     for (const key of ["href", "origin", "protocol", "host", "hostname", "port", "pathname", "search", "hash"]) Object.defineProperty(locationFacade, key, { enumerable: true, get: () => new URL(current.url)[key], set: (value) => {
@@ -3519,6 +3557,7 @@
     read(document, "baseURI", () => current?.base || "about:blank");
     read(document, "referrer", () => "");
     read(Node.prototype, "baseURI", () => current?.base || "about:blank");
+    read(document, "readyState", () => readyState);
     Object.defineProperty(Document.prototype, "cookie", { configurable: false, get() {
       return cookie;
     }, set(value) {
@@ -3731,26 +3770,88 @@
     async function compile(source, module = false) {
       return (await rpc("compile", { source, base: current.base, module })).source;
     }
+    function scriptFailure(error, url = "inline script") {
+      scriptErrors++;
+      console.warn("Browzen could not run " + url + ": " + error.message);
+      send("script-error", { count: scriptErrors });
+    }
+    native.add.call(window, "error", (e) => {
+      if (e.target === window) {
+        scriptErrors++;
+        send("script-error", { count: scriptErrors });
+      }
+    });
+    async function prepare(data) {
+      try {
+        if (data.error) throw Error(data.error);
+        if (data.external) {
+          const id = await resourceEntry(data.url, data.module ? "module" : data.cors ? "script-cors" : "script", data.integrity);
+          return { ...data, id };
+        }
+        if (data.raw) {
+          const out = await rpc("compile", { source: data.source, base: data.url, module: data.module });
+          data = { ...data, source: out.source, imports: out.imports };
+        }
+        for (const dep of data.imports || []) await resourceEntry(dep.url, "module");
+        return data;
+      } catch (error) {
+        return { ...data, error: error.message };
+      }
+    }
+    async function execute(data, marker) {
+      if (!marker?.parentNode) return;
+      if (data.error) {
+        scriptFailure(Error(data.error), data.url);
+        marker.remove();
+        return;
+      }
+      const node = document.createElement("script");
+      internal.add(node);
+      for (const [k, v] of data.attrs || []) if (!k.startsWith("data-bzn-") && !["src", "integrity", "nonce", "crossorigin", "async", "defer", "nomodule"].includes(k)) attr(node, k, v);
+      if (data.external) attr(node, "data-bzn-src", data.url);
+      if (data.module) node.type = "module";
+      aliases();
+      if (data.id || data.module) {
+        const url = data.id ? await materializeAsync(data.id) : native.create(new native.Blob([data.source], { type: "text/javascript" }));
+        attr(node, "src", url);
+        await new Promise((resolve) => {
+          const timer = setTimeout(() => {
+            scriptFailure(Error("Script execution timed out."), data.url);
+            resolve();
+          }, 3e4);
+          node.onload = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          node.onerror = () => {
+            clearTimeout(timer);
+            scriptFailure(Error("Script execution failed."), data.url);
+            resolve();
+          };
+          native.insert.call(marker.parentNode, node, marker);
+        });
+      } else {
+        node.textContent = data.source;
+        native.insert.call(marker.parentNode, node, marker);
+      }
+      marker.remove();
+    }
     async function prepareScript(el) {
       if (processed.has(el) || internal.has(el)) return;
       processed.add(el);
       if (current.noScript) return;
       const type = (native.get.call(el, "type") || "").toLowerCase();
       if (type && type !== "module" && !/^(text|application)\/(javascript|ecmascript)$/.test(type)) return;
-      const src = native.get.call(el, "data-bzn-src"), script = document.createElement("script");
-      internal.add(script);
-      for (const a of el.attributes) if (!["src", "integrity", "nonce", "crossorigin"].includes(a.name) && !a.name.startsWith("data-bzn-")) attr(script, a.name, a.value);
+      const src = native.get.call(el, "data-bzn-src"), module = type === "module";
+      if (!module && el.noModule) return;
       try {
-        if (src) {
-          const value = await resource(src, type === "module" ? "module" : "script");
-          aliases();
-          attr(script, "src", value);
-        } else script.textContent = await compile(el.textContent, type === "module");
-        native.insert.call(el.parentNode || document.head, script, el.parentNode ? el : null);
-        script.addEventListener("load", () => el.dispatchEvent(new Event("load")));
-        script.addEventListener("error", () => el.dispatchEvent(new Event("error")));
-        if (!src) el.dispatchEvent(new Event("load"));
-      } catch {
+        const data = await prepare({ url: src ? remote(src) : current.base, external: !!src, module, cors: el.hasAttribute("crossorigin"), integrity: native.get.call(el, "integrity") || "", source: src ? "" : await compile(el.textContent, module), attrs: [...el.attributes].map((a) => [a.name, a.value]) });
+        const marker = document.createElement("template");
+        native.insert.call(el.parentNode || document.head, marker, el.parentNode ? el : null);
+        await execute(data, marker);
+        el.dispatchEvent(new Event(data.error ? "error" : "load"));
+      } catch (error) {
+        scriptFailure(error, src || "inline script");
         el.dispatchEvent(new Event("error"));
       }
     }
@@ -3771,9 +3872,8 @@
         attr(el, key, value);
         return;
       }
-      resource(value, kind).then((url) => {
+      resource(value, kind, native.get.call(el, "data-bzn-integrity") || native.get.call(el, "integrity") || "").then((url) => {
         attr(el, key, url);
-        if (kind === "style") el.dispatchEvent(new Event("load"));
       }).catch(() => el.dispatchEvent(new Event("error")));
     }
     Element.prototype.setAttribute = function(key, value) {
@@ -3784,14 +3884,17 @@
         return;
       }
       if (k.startsWith("on")) {
-        if (!current?.noScript) compile(String(value)).then((code) => this[k] = native.Function("event", code));
+        attr(this, "data-bzn-" + k, String(value));
+        native.set.call(this, key, "");
+        if (!current?.noScript) compile(String(value)).then((code) => this[k] = native.Function("event", code)).catch(() => {
+        });
         return;
       }
       return native.set.call(this, key, value);
     };
     Element.prototype.getAttribute = function(key) {
       const k = String(key).toLowerCase();
-      return urlAttrs.has(k) ? native.get.call(this, "data-bzn-" + k) ?? native.get.call(this, key) : native.get.call(this, key);
+      return urlAttrs.has(k) || k.startsWith("on") ? native.get.call(this, "data-bzn-" + k) ?? native.get.call(this, key) : native.get.call(this, key);
     };
     for (const [cls, keys] of [[HTMLScriptElement, ["src"]], [HTMLImageElement, ["src", "srcset"]], [HTMLLinkElement, ["href"]], [HTMLAnchorElement, ["href"]], [HTMLFormElement, ["action"]], [HTMLInputElement, ["src", "formAction"]], [HTMLButtonElement, ["formAction"]], [HTMLMediaElement, ["src"]], [HTMLSourceElement, ["src", "srcset"]], [HTMLIFrameElement, ["src", "srcdoc"]]]) for (const key of keys) {
       const d = Object.getOwnPropertyDescriptor(cls.prototype, key);
@@ -3971,12 +4074,12 @@
     HTMLFormElement.prototype.submit = function() {
       submit(this);
     };
-    native.add.call(document, "submit", (e) => {
+    native.add.call(window, "submit", (e) => {
       if (e.defaultPrevented) return;
       e.preventDefault();
       submit(e.target, e.submitter);
     });
-    native.add.call(document, "click", (e) => {
+    native.add.call(window, "click", (e) => {
       if (e.defaultPrevented || e.button !== 0) return;
       const a = e.target.closest?.("a,area");
       if (!a) return;
@@ -3994,7 +4097,52 @@
       } catch {
       }
     });
+    async function hydrateStyles() {
+      const jobs = [];
+      for (const el of document.querySelectorAll("link[data-bzn-href],style[data-bzn-css],[data-bzn-style]")) {
+        if (el.tagName === "LINK") {
+          jobs.push(resource(native.get.call(el, "data-bzn-href"), "style", native.get.call(el, "data-bzn-integrity") || "").then((url) => new Promise((resolve) => {
+            const timer = setTimeout(resolve, 15e3);
+            el.onload = el.onerror = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+            attr(el, "href", url);
+          })).catch((error) => console.warn("Browzen stylesheet: " + error.message)));
+        }
+        if (el.hasAttribute("data-bzn-css")) jobs.push(convertCSS(native.get.call(el, "data-bzn-css")).then((css) => {
+          el.textContent = css;
+        }).catch(() => {
+        }));
+        if (el.hasAttribute("data-bzn-style")) jobs.push(convertCSS(native.get.call(el, "data-bzn-style")).then((css) => attr(el, "style", css)).catch(() => {
+        }));
+      }
+      return Promise.allSettled(jobs);
+    }
+    function hydrateImages() {
+      const jobs = [];
+      for (const el of document.querySelectorAll("[data-bzn-src],[data-bzn-srcset],[data-bzn-poster],image[data-bzn-href],image[data-bzn-xlink\\:href]")) {
+        if (!["IMG", "IMAGE", "INPUT", "VIDEO", "AUDIO", "SOURCE", "TRACK", "image"].includes(el.tagName)) continue;
+        for (const key of ["src", "srcset", "poster", "href", "xlink:href"]) {
+          const value = native.get.call(el, "data-bzn-" + key);
+          if (!value) continue;
+          const task = () => resource(value).then((url) => attr(el, key, url)).catch(() => {
+          });
+          if (el.tagName === "IMG" && el.loading === "lazy" && "IntersectionObserver" in window) {
+            const observer = new IntersectionObserver((entries) => {
+              if (entries.some((e) => e.isIntersecting)) {
+                observer.disconnect();
+                task();
+              }
+            }, { rootMargin: "400px" });
+            observer.observe(el);
+          } else jobs.push(task());
+        }
+      }
+      return Promise.allSettled(jobs);
+    }
     async function install(payload) {
+      documentInstalled = true;
       current = payload;
       cookie = payload.cookies || "";
       addResources(payload.resources);
@@ -4003,41 +4151,57 @@
       define(window, "indexedDB", new FDBFactory_default());
       define(window, "IDBKeyRange", FDBKeyRange_default);
       const t = document.createElement("template");
-      native.inner.set.call(t, payload.html.replace(/bzn-resource:(r\d+)/g, (_, id) => materialize(id)));
+      native.inner.set.call(t, payload.html);
       native.append.call(document.body, t.content);
       document.documentElement.style.zoom = String(payload.zoom / 100);
-      aliases();
-      for (const el of document.querySelectorAll("*")) for (const a of [...el.attributes]) if (a.name.startsWith("data-bzn-on") && !current.noScript) try {
-        el[a.name.slice(9)] = native.Function("event", a.value);
-      } catch {
-      }
-      for (let i = 0; i < payload.scripts.length; i++) {
-        const data = payload.scripts[i], marker = document.querySelector('template[data-bzn-script="' + i + '"]');
-        if (!data || !marker) continue;
-        const node = document.createElement("script");
-        internal.add(node);
-        for (const [k, v] of data.attrs) if (!k.startsWith("data-bzn-")) attr(node, k, v);
-        if (data.resource) attr(node, "data-bzn-src", data.url);
-        if (data.module) node.type = "module";
-        const source = data.resource ? resources.get(data.resource).body : data.source;
-        if (data.module) {
-          const url = native.create(new Blob([source], { type: "text/javascript" }));
-          attr(node, "src", url);
-          await new Promise((resolve) => {
-            node.onload = node.onerror = resolve;
-            native.insert.call(marker.parentNode, node, marker);
-          });
-        } else {
-          node.textContent = source;
-          native.insert.call(marker.parentNode, node, marker);
+      let lastTitle = document.title;
+      send("title", { title: lastTitle });
+      new MutationObserver(() => {
+        if (document.title !== lastTitle) {
+          lastTitle = document.title;
+          send("title", { title: lastTitle });
         }
-        marker.remove();
+      }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+      const handlers = [];
+      for (const el of document.querySelectorAll("*")) for (const a of [...el.attributes]) if (a.name.startsWith("data-bzn-on") && !current.noScript) handlers.push(compile(a.value).then((code) => {
+        el[a.name.slice(9)] = native.Function("event", code);
+      }).catch(() => {
+      }));
+      const prepared = payload.scripts.map((data) => data && !(!data.module && data.nomodule) ? prepare(data) : Promise.resolve(null));
+      const styles = hydrateStyles();
+      let painted = false;
+      const paint = () => {
+        if (!painted) {
+          painted = true;
+          send("paint");
+        }
+      };
+      requestAnimationFrame(paint);
+      setTimeout(paint, 100);
+      const images = new Promise((resolve) => setTimeout(() => resolve(hydrateImages()), 0));
+      const deferred = [], asyncTasks = [];
+      for (let i = 0; i < payload.scripts.length; i++) {
+        const original = payload.scripts[i];
+        if (!original) continue;
+        const marker = document.querySelector('template[data-bzn-script="' + i + '"]');
+        const run = async () => {
+          const data = await prepared[i];
+          if (data) await execute(data, marker);
+          else marker?.remove();
+        };
+        if (original.async && original.external) asyncTasks.push(run());
+        else if (original.module || original.defer && original.external) deferred.push(run);
+        else await run();
       }
-      documentInstalled = true;
+      readyState = "interactive";
+      for (const run of deferred) await run();
+      await Promise.allSettled([styles, ...handlers]);
       native.dispatch.call(document, new Event("DOMContentLoaded", { bubbles: true }));
+      send("dom-ready");
+      await Promise.allSettled([...asyncTasks, images]);
+      readyState = "complete";
       native.dispatch.call(window, new Event("load"));
-      send("loaded", { title: document.title });
-      new MutationObserver(() => send("title", { title: document.title })).observe(document.head, { childList: true, subtree: true, characterData: true });
+      send("loaded", { title: document.title, scriptErrors });
     }
     const accept = (e) => {
       if (ready || e.source !== parent || e.data?.type !== "browzen-port" || !e.ports[0]) return;

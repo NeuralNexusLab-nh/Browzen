@@ -1,9 +1,10 @@
 import {IDBFactory,IDBKeyRange} from './idb.js';
+import {neutralizeCSS} from './css-rewrite.js';
 // Runs only in an opaque-origin frame. The parent never evaluates website code.
 (() => {
  const native={append:Node.prototype.appendChild,insert:Node.prototype.insertBefore,replace:Node.prototype.replaceChild,set:Element.prototype.setAttribute,get:Element.prototype.getAttribute,remove:Element.prototype.removeAttribute,inner:Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML'),add:EventTarget.prototype.addEventListener,dispatch:EventTarget.prototype.dispatchEvent,Blob:Blob,create:URL.createObjectURL.bind(URL),revoke:URL.revokeObjectURL.bind(URL),Function:Function};
  window.__browzenPrivacy?.install(window);
- let port,current,sequence=0,cookie='',ready=false,documentInstalled=false;
+ let port,current,sequence=0,cookie='',ready=false,documentInstalled=false,readyState='loading',scriptErrors=0;
  const pending=new Map(),resources=new Map(),urls=new Map(),internal=new WeakSet(),processed=new WeakSet(),popups=new Map();
  const scope=()=>({id:current.scope,origin:new URL(current.url).origin,topOrigin:new URL(current.url).origin,isMain:true});
  function send(type,data={}){port.postMessage({type,...data});}
@@ -23,8 +24,19 @@ import {IDBFactory,IDBKeyRange} from './idb.js';
   if(r.opaqueURL)return r.opaqueURL;let body=r.body;if(typeof body==='string'&&r.type==='text/css'){const next=new Set([...stack,id]);body=body.replace(/bzn-resource:(r\d+)/g,(_,dep)=>materialize(dep,next));}
   const url=native.create(new native.Blob([body],{type:r.type}));urls.set(id,url);return url;
  }
- function aliases(){const imports={};for(const r of resources.values())if(r.type==='text/javascript')imports['bzn:'+r.url]=materialize(r.id);const node=document.createElement('script');internal.add(node);node.type='importmap';node.textContent=JSON.stringify({imports});native.append.call(document.head,node);}
- async function resource(url,kind='binary'){const result=await rpc('resource',{url:remote(url),base:current.base,kind});addResources(result.resources);return materialize(result.id);}
+ async function materializeAsync(id,stack=new Set()){
+  if(urls.has(id))return urls.get(id);const r=resources.get(id);if(!r||r.type!=='text/css')return materialize(id);if(stack.has(id))return 'data:,';
+  const next=new Set([...stack,id]),dependencies=r.dependencies||[...new Set([...String(r.body).matchAll(/bzn-resource:(r\d+)/g)].map(m=>m[1]))],mapped=new Map();
+  for(const dep of dependencies)mapped.set(dep,await materializeAsync(dep,next));
+  const url=native.create(new native.Blob([String(r.body).replace(/bzn-resource:(r\d+)/g,(_,dep)=>mapped.get(dep)||'data:,')],{type:'text/css'}));
+  urls.set(id,url);return url;
+ }
+ const aliasNames=new Set();
+ function aliases(){const imports={};for(const r of resources.values())if(r.module&&!aliasNames.has(r.url)){imports['bzn:'+r.url]=materialize(r.id);aliasNames.add(r.url);}if(!Object.keys(imports).length)return;const node=document.createElement('script');internal.add(node);node.type='importmap';node.textContent=JSON.stringify({imports});native.append.call(document.head,node);}
+ const resourcePending=new Map();
+ async function resourceEntry(url,kind='binary',integrity=''){const key=kind+':'+remote(url)+':'+integrity;if(!resourcePending.has(key)){const promise=rpc('resource',{url:remote(url),base:current.base,kind,integrity}).then(result=>{addResources(result.resources);return result.id;});resourcePending.set(key,promise);promise.catch(()=>resourcePending.delete(key));}return resourcePending.get(key);}
+ async function resource(url,kind='binary',integrity=''){return materializeAsync(await resourceEntry(url,kind,integrity));}
+ async function convertCSS(source){const result=await rpc('css',{source,base:current.base});addResources(result.resources);let text=result.css;const ids=[...new Set([...text.matchAll(/bzn-resource:(r\d+)/g)].map(m=>m[1]))];for(const id of ids){const url=await materializeAsync(id);text=text.replaceAll('bzn-resource:'+id+'"',url+'"').replaceAll('bzn-resource:'+id+"'",url+"'");}return text;}
  const locationFacade={};
  for(const key of ['href','origin','protocol','host','hostname','port','pathname','search','hash'])Object.defineProperty(locationFacade,key,{enumerable:true,get:()=>new URL(current.url)[key],set:value=>{const u=new URL(current.url);if(key==='origin')return;u[key]=value;navigate(u.href);}});
  Object.assign(locationFacade,{assign:navigate,replace:navigate,reload:()=>navigate(current.url),toString:()=>current.url});
@@ -47,6 +59,7 @@ import {IDBFactory,IDBKeyRange} from './idb.js';
  for(const [k,fn]of [['pushState',oldPush],['replaceState',oldReplace]])define(history,k,function(state,title,url){if(url!=null){const u=remote(url,current.url);if(new URL(u).origin!==new URL(current.url).origin)throw new DOMException('History must keep the same origin.','SecurityError');current.url=u;send('history',{url:u});}fn(state,title);});
  read(document,'URL',()=>current?.url||'about:blank');read(document,'documentURI',()=>current?.url||'about:blank');read(document,'baseURI',()=>current?.base||'about:blank');read(document,'referrer',()=>'');
  read(Node.prototype,'baseURI',()=>current?.base||'about:blank');
+ read(document,'readyState',()=>readyState);
  // The virtual cookie setter never exposes HttpOnly cookies or account cookies.
  Object.defineProperty(Document.prototype,'cookie',{configurable:false,get(){return cookie;},set(value){const pair=String(value).split(';')[0],name=pair.split('=')[0].trim();cookie=cookie.split('; ').filter(p=>p.split('=')[0]!==name).concat(pair).filter(Boolean).join('; ');send('cookie',{value:String(value)});}});
  function storage(kind,initial){let values={...initial};const api={get length(){return Object.keys(values).length;},key:i=>Object.keys(values)[i]??null,getItem:k=>Object.hasOwn(values,String(k))?String(values[k]):null,setItem(k,v){const copy={...values,[String(k)]:String(v)};if(JSON.stringify(copy).length>1024*1024)throw new DOMException('Website storage exceeds 1 MB.','QuotaExceededError');values=copy;send('store',{kind,values});},removeItem(k){delete values[String(k)];send('store',{kind,values});},clear(){values={};send('store',{kind,values});}};return new Proxy(api,{get:(t,k)=>k in t?t[k]:t.getItem(k),set:(t,k,v)=>{t.setItem(k,v);return true;},deleteProperty:(t,k)=>{t.removeItem(k);return true;},ownKeys:()=>Object.keys(values),getOwnPropertyDescriptor:(t,k)=>Object.hasOwn(values,k)?{enumerable:true,configurable:true,value:values[k]}:Object.getOwnPropertyDescriptor(t,k)});}
@@ -85,16 +98,32 @@ import {IDBFactory,IDBKeyRange} from './idb.js';
  const urlAttrs=new Set(['src','href','xlink:href','poster','action','formaction','srcset','imagesrcset','data','srcdoc','ping']);
  function attr(el,key,value){native.set.call(el,key,value);}
  async function compile(source,module=false){return (await rpc('compile',{source,base:current.base,module})).source;}
+ function scriptFailure(error,url='inline script'){scriptErrors++;console.warn('Browzen could not run '+url+': '+error.message);send('script-error',{count:scriptErrors});}
+ native.add.call(window,'error',e=>{if(e.target===window){scriptErrors++;send('script-error',{count:scriptErrors});}});
+ async function prepare(data){
+  try{if(data.error)throw Error(data.error);if(data.external){const id=await resourceEntry(data.url,data.module?'module':data.cors?'script-cors':'script',data.integrity);return {...data,id};}
+   if(data.raw){const out=await rpc('compile',{source:data.source,base:data.url,module:data.module});data={...data,source:out.source,imports:out.imports};}for(const dep of data.imports||[])await resourceEntry(dep.url,'module');return data;
+  }catch(error){return {...data,error:error.message};}
+ }
+ async function execute(data,marker){
+  if(!marker?.parentNode)return;if(data.error){scriptFailure(Error(data.error),data.url);marker.remove();return;}
+  const node=document.createElement('script');internal.add(node);for(const [k,v]of data.attrs||[])if(!k.startsWith('data-bzn-')&&!['src','integrity','nonce','crossorigin','async','defer','nomodule'].includes(k))attr(node,k,v);
+  if(data.external)attr(node,'data-bzn-src',data.url);if(data.module)node.type='module';aliases();
+  if(data.id||data.module){const url=data.id?await materializeAsync(data.id):native.create(new native.Blob([data.source],{type:'text/javascript'}));attr(node,'src',url);await new Promise(resolve=>{const timer=setTimeout(()=>{scriptFailure(Error('Script execution timed out.'),data.url);resolve();},30000);node.onload=()=>{clearTimeout(timer);resolve();};node.onerror=()=>{clearTimeout(timer);scriptFailure(Error('Script execution failed.'),data.url);resolve();};native.insert.call(marker.parentNode,node,marker);});}
+  else{node.textContent=data.source;native.insert.call(marker.parentNode,node,marker);}marker.remove();
+ }
  async function prepareScript(el){if(processed.has(el)||internal.has(el))return;processed.add(el);if(current.noScript)return;const type=(native.get.call(el,'type')||'').toLowerCase();if(type&&type!=='module'&&!/^(text|application)\/(javascript|ecmascript)$/.test(type))return;
-  const src=native.get.call(el,'data-bzn-src'),script=document.createElement('script');internal.add(script);for(const a of el.attributes)if(!['src','integrity','nonce','crossorigin'].includes(a.name)&&!a.name.startsWith('data-bzn-'))attr(script,a.name,a.value);
-  try{if(src){const value=await resource(src,type==='module'?'module':'script');aliases();attr(script,'src',value);}else script.textContent=await compile(el.textContent,type==='module');native.insert.call(el.parentNode||document.head,script,el.parentNode?el:null);script.addEventListener('load',()=>el.dispatchEvent(new Event('load')));script.addEventListener('error',()=>el.dispatchEvent(new Event('error')));if(!src)el.dispatchEvent(new Event('load'));}catch{el.dispatchEvent(new Event('error'));}
+  const src=native.get.call(el,'data-bzn-src'),module=type==='module';if(!module&&el.noModule)return;
+  try{const data=await prepare({url:src?remote(src):current.base,external:!!src,module,cors:el.hasAttribute('crossorigin'),integrity:native.get.call(el,'integrity')||'',source:src?'':await compile(el.textContent,module),attrs:[...el.attributes].map(a=>[a.name,a.value])});
+   const marker=document.createElement('template');native.insert.call(el.parentNode||document.head,marker,el.parentNode?el:null);await execute(data,marker);el.dispatchEvent(new Event(data.error?'error':'load'));
+  }catch(error){scriptFailure(error,src||'inline script');el.dispatchEvent(new Event('error'));}
  }
  function scheduleURL(el,key,value){attr(el,'data-bzn-'+key,value);if(key==='href'&&['A','AREA'].includes(el.tagName)){attr(el,'href','#');return;}if(el.tagName==='SCRIPT'){if(el.isConnected)prepareScript(el);return;}if(['action','formaction','srcdoc','srcset','imagesrcset','ping'].includes(key))return;
   const kind=el.tagName==='LINK'&&/stylesheet/i.test(native.get.call(el,'rel')||'')?'style':'binary';if(el.tagName==='LINK'&&kind!=='style')return;
-  if(/^data:/i.test(String(value))){attr(el,key,value);return;}resource(value,kind).then(url=>{attr(el,key,url);if(kind==='style')el.dispatchEvent(new Event('load'));}).catch(()=>el.dispatchEvent(new Event('error')));
+  if(/^data:/i.test(String(value))){attr(el,key,value);return;}resource(value,kind,native.get.call(el,'data-bzn-integrity')||native.get.call(el,'integrity')||'').then(url=>{attr(el,key,url);}).catch(()=>el.dispatchEvent(new Event('error')));
  }
- Element.prototype.setAttribute=function(key,value){const k=String(key).toLowerCase();if(internal.has(this))return native.set.call(this,key,value);if(urlAttrs.has(k)){scheduleURL(this,k,String(value));return;}if(k.startsWith('on')){if(!current?.noScript)compile(String(value)).then(code=>this[k]=native.Function('event',code));return;}return native.set.call(this,key,value);};
- Element.prototype.getAttribute=function(key){const k=String(key).toLowerCase();return urlAttrs.has(k)?native.get.call(this,'data-bzn-'+k)??native.get.call(this,key):native.get.call(this,key);};
+ Element.prototype.setAttribute=function(key,value){const k=String(key).toLowerCase();if(internal.has(this))return native.set.call(this,key,value);if(urlAttrs.has(k)){scheduleURL(this,k,String(value));return;}if(k.startsWith('on')){attr(this,'data-bzn-'+k,String(value));native.set.call(this,key,'');if(!current?.noScript)compile(String(value)).then(code=>this[k]=native.Function('event',code)).catch(()=>{});return;}return native.set.call(this,key,value);};
+ Element.prototype.getAttribute=function(key){const k=String(key).toLowerCase();return urlAttrs.has(k)||k.startsWith('on')?native.get.call(this,'data-bzn-'+k)??native.get.call(this,key):native.get.call(this,key);};
  for(const [cls,keys]of [[HTMLScriptElement,['src']],[HTMLImageElement,['src','srcset']],[HTMLLinkElement,['href']],[HTMLAnchorElement,['href']],[HTMLFormElement,['action']],[HTMLInputElement,['src','formAction']],[HTMLButtonElement,['formAction']],[HTMLMediaElement,['src']],[HTMLSourceElement,['src','srcset']],[HTMLIFrameElement,['src','srcdoc']]])for(const key of keys){const d=Object.getOwnPropertyDescriptor(cls.prototype,key);if(d?.configurable)Object.defineProperty(cls.prototype,key,{...d,get(){const value=native.get.call(this,'data-bzn-'+key.toLowerCase());if(value!=null)try{return remote(value);}catch{return value;}return d.get?.call(this);},set(value){scheduleURL(this,key.toLowerCase(),String(value));}});}
  function sanitize(node){if(!node?.querySelectorAll||internal.has(node))return;const nodes=[...(node.nodeType===1?[node]:[]),...node.querySelectorAll('*')];for(const el of nodes){if(internal.has(el))continue;if(['IFRAME','FRAME','OBJECT','EMBED','BASE','META'].includes(el.tagName)){el.remove();continue;}for(const a of [...el.attributes])if(urlAttrs.has(a.name.toLowerCase())){const k=a.name.toLowerCase(),original=native.get.call(el,'data-bzn-'+k)??a.value;native.remove.call(el,a.name);scheduleURL(el,k,original);}else if(a.name.startsWith('on')){native.remove.call(el,a.name);if(!current.noScript)compile(a.value).then(code=>el[a.name]=native.Function('event',code));}if(el.tagName==='SCRIPT'){if(!processed.has(el)){attr(el,'data-bzn-type',el.type);attr(el,'type','application/x-browzen-pending');queueMicrotask(()=>{attr(el,'type',native.get.call(el,'data-bzn-type')||'');prepareScript(el);});}}}}
  for(const [key,fn]of [['appendChild',native.append],['insertBefore',native.insert],['replaceChild',native.replace]])Node.prototype[key]=function(node,...args){if(node?.nodeType===1&&blockedTags.has(node.localName.toLowerCase()))return node;sanitize(node);return fn.call(this,node,...args);};
@@ -114,14 +143,30 @@ import {IDBFactory,IDBKeyRange} from './idb.js';
  function formData(form,submitter){const data=new FormData(form,submitter);return {method:(form.method||'get').toLowerCase(),enctype:form.enctype||'application/x-www-form-urlencoded',entries:[...data]};}
  function submit(form,submitter){let url=remote(native.get.call(submitter||form,'data-bzn-formaction')||native.get.call(form,'data-bzn-action')||current.url);const data=formData(form,submitter),target=submitter?.formTarget||form.target;if(target&&target!=='_self'&&target!=='_top'&&target!=='_parent'){if(data.method==='get'){const u=new URL(url);u.search=new URLSearchParams(data.entries).toString();popup(u.href,target);}else{const token='p'+(++sequence);action('popup-open',{token,url,target,form:data,gesture:navigator.userActivation?.isActive});}}else send('navigate',{url,form:data});}
  HTMLFormElement.prototype.submit=function(){submit(this);};
- native.add.call(document,'submit',e=>{if(e.defaultPrevented)return;e.preventDefault();submit(e.target,e.submitter);});
- native.add.call(document,'click',e=>{if(e.defaultPrevented||e.button!==0)return;const a=e.target.closest?.('a,area');if(!a)return;const raw=native.get.call(a,'data-bzn-href')||native.get.call(a,'href');if(!raw)return;e.preventDefault();if(/^javascript:/i.test(raw)){if(!current.noScript)compile(raw.slice(11)).then(code=>(0,eval)(code));return;}try{const url=remote(raw);if((a.target&&a.target!=='_self')||e.ctrlKey||e.metaKey)popup(url,a.target||'_blank');else navigate(url);}catch{}});
- async function install(payload){current=payload;cookie=payload.cookies||'';addResources(payload.resources);define(window,'localStorage',storage('local',payload.local));define(window,'sessionStorage',storage('session',payload.session));define(window,'indexedDB',new IDBFactory());define(window,'IDBKeyRange',IDBKeyRange);
-  const t=document.createElement('template');native.inner.set.call(t,payload.html.replace(/bzn-resource:(r\d+)/g,(_,id)=>materialize(id)));native.append.call(document.body,t.content);document.documentElement.style.zoom=String(payload.zoom/100);
-  aliases();
-  for(const el of document.querySelectorAll('*'))for(const a of [...el.attributes])if(a.name.startsWith('data-bzn-on')&&!current.noScript)try{el[a.name.slice(9)]=native.Function('event',a.value);}catch{}
-  for(let i=0;i<payload.scripts.length;i++){const data=payload.scripts[i],marker=document.querySelector('template[data-bzn-script="'+i+'"]');if(!data||!marker)continue;const node=document.createElement('script');internal.add(node);for(const [k,v]of data.attrs)if(!k.startsWith('data-bzn-'))attr(node,k,v);if(data.resource)attr(node,'data-bzn-src',data.url);if(data.module)node.type='module';const source=data.resource?resources.get(data.resource).body:data.source;if(data.module){const url=native.create(new Blob([source],{type:'text/javascript'}));attr(node,'src',url);await new Promise(resolve=>{node.onload=node.onerror=resolve;native.insert.call(marker.parentNode,node,marker);});}else{node.textContent=source;native.insert.call(marker.parentNode,node,marker);}marker.remove();}
-  documentInstalled=true;native.dispatch.call(document,new Event('DOMContentLoaded',{bubbles:true}));native.dispatch.call(window,new Event('load'));send('loaded',{title:document.title});new MutationObserver(()=>send('title',{title:document.title})).observe(document.head,{childList:true,subtree:true,characterData:true});
+ // Run after document-level delegated handlers (jQuery/React/router), not before.
+ native.add.call(window,'submit',e=>{if(e.defaultPrevented)return;e.preventDefault();submit(e.target,e.submitter);});
+ native.add.call(window,'click',e=>{if(e.defaultPrevented||e.button!==0)return;const a=e.target.closest?.('a,area');if(!a)return;const raw=native.get.call(a,'data-bzn-href')||native.get.call(a,'href');if(!raw)return;e.preventDefault();if(/^javascript:/i.test(raw)){if(!current.noScript)compile(raw.slice(11)).then(code=>(0,eval)(code));return;}try{const url=remote(raw);if((a.target&&a.target!=='_self')||e.ctrlKey||e.metaKey)popup(url,a.target||'_blank');else navigate(url);}catch{}});
+ async function hydrateStyles(){const jobs=[];for(const el of document.querySelectorAll('link[data-bzn-href],style[data-bzn-css],[data-bzn-style]')){
+  if(el.tagName==='LINK'){jobs.push(resource(native.get.call(el,'data-bzn-href'),'style',native.get.call(el,'data-bzn-integrity')||'').then(url=>new Promise(resolve=>{const timer=setTimeout(resolve,15000);el.onload=el.onerror=()=>{clearTimeout(timer);resolve();};attr(el,'href',url);})).catch(error=>console.warn('Browzen stylesheet: '+error.message)));}
+  if(el.hasAttribute('data-bzn-css'))jobs.push(convertCSS(native.get.call(el,'data-bzn-css')).then(css=>{el.textContent=css;}).catch(()=>{}));
+  if(el.hasAttribute('data-bzn-style'))jobs.push(convertCSS(native.get.call(el,'data-bzn-style')).then(css=>attr(el,'style',css)).catch(()=>{}));
+ }return Promise.allSettled(jobs);}
+ function hydrateImages(){const jobs=[];for(const el of document.querySelectorAll('[data-bzn-src],[data-bzn-srcset],[data-bzn-poster],image[data-bzn-href],image[data-bzn-xlink\\:href]')){
+  if(!['IMG','IMAGE','INPUT','VIDEO','AUDIO','SOURCE','TRACK','image'].includes(el.tagName))continue;
+  for(const key of ['src','srcset','poster','href','xlink:href']){const value=native.get.call(el,'data-bzn-'+key);if(!value)continue;const task=()=>resource(value).then(url=>attr(el,key,url)).catch(()=>{});if(el.tagName==='IMG'&&el.loading==='lazy'&&'IntersectionObserver'in window){const observer=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)){observer.disconnect();task();}},{rootMargin:'400px'});observer.observe(el);}else jobs.push(task());}
+ }return Promise.allSettled(jobs);}
+ async function install(payload){documentInstalled=true;current=payload;cookie=payload.cookies||'';addResources(payload.resources);define(window,'localStorage',storage('local',payload.local));define(window,'sessionStorage',storage('session',payload.session));define(window,'indexedDB',new IDBFactory());define(window,'IDBKeyRange',IDBKeyRange);
+  const t=document.createElement('template');native.inner.set.call(t,payload.html);native.append.call(document.body,t.content);document.documentElement.style.zoom=String(payload.zoom/100);
+  let lastTitle=document.title;send('title',{title:lastTitle});new MutationObserver(()=>{if(document.title!==lastTitle){lastTitle=document.title;send('title',{title:lastTitle});}}).observe(document.documentElement,{childList:true,subtree:true,characterData:true});
+  const handlers=[];for(const el of document.querySelectorAll('*'))for(const a of [...el.attributes])if(a.name.startsWith('data-bzn-on')&&!current.noScript)handlers.push(compile(a.value).then(code=>{el[a.name.slice(9)]=native.Function('event',code);}).catch(()=>{}));
+  const prepared=payload.scripts.map(data=>data&&!(!data.module&&data.nomodule)?prepare(data):Promise.resolve(null));
+  const styles=hydrateStyles();let painted=false;const paint=()=>{if(!painted){painted=true;send('paint');}};requestAnimationFrame(paint);setTimeout(paint,100);
+  const images=new Promise(resolve=>setTimeout(()=>resolve(hydrateImages()),0));const deferred=[],asyncTasks=[];
+  for(let i=0;i<payload.scripts.length;i++){const original=payload.scripts[i];if(!original)continue;const marker=document.querySelector('template[data-bzn-script="'+i+'"]');const run=async()=>{const data=await prepared[i];if(data)await execute(data,marker);else marker?.remove();};
+   if(original.async&&original.external)asyncTasks.push(run());else if(original.module||original.defer&&original.external)deferred.push(run);else await run();
+  }
+  readyState='interactive';for(const run of deferred)await run();await Promise.allSettled([styles,...handlers]);native.dispatch.call(document,new Event('DOMContentLoaded',{bubbles:true}));send('dom-ready');
+  await Promise.allSettled([...asyncTasks,images]);readyState='complete';native.dispatch.call(window,new Event('load'));send('loaded',{title:document.title,scriptErrors});
  }
  const accept=e=>{
   if(ready||e.source!==parent||e.data?.type!=='browzen-port'||!e.ports[0])return;

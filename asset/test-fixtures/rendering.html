@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Progressive rendering checks</title>
+<style>body{background:#111827;color:#e8eeff;font:16px system-ui;padding:30px}pre{white-space:pre-wrap;background:#22314a;padding:16px}img{width:80px;height:80px}</style>
+<h1>HTML visible before slow resources</h1><pre id="order">Waiting for script checks</pre><pre id="image">Slow image pending</pre>
+<form id="delegated"><button>Test delegated submission</button></form><pre id="delegated-result">Delegated form pending</pre>
+<img src="/slow-image.svg" onload="document.querySelector('#image').textContent='Slow image loaded'">
+<script>window.order=['inline-before'];</script>
+<script>document.addEventListener('submit',event=>{if(event.target.id==='delegated'){event.preventDefault();document.querySelector('#delegated-result').textContent='Website handler kept control';}});</script>
+<script>const eventProbe=document.createElement('div');eventProbe.setAttribute('onsubmit','t');window.eventAttributePreserved=!!eventProbe.attributes.onsubmit;</script>
+<script src="https://cdn.browzen.test/order-block.js"></script>
+<script>window.order.push('inline-after');</script>
+<script defer src="/order-defer.js"></script>
+<script async src="/order-async.js"></script>
+<script type="module" src="/order-module.js"></script>
+<script nomodule>window.order.push('ERROR-nomodule');</script>
+<script>document.addEventListener('DOMContentLoaded',()=>{const required=['inline-before','cross-origin-classic','inline-after','defer','module-dependency','module'];const filtered=window.order.filter(x=>x!=='async');document.querySelector('#order').textContent=JSON.stringify({order:window.order,correct:JSON.stringify(filtered)===JSON.stringify(required),eventAttributePreserved:window.eventAttributePreserved,state:document.readyState});});</script>
+</html>

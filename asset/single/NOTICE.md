@@ -1,6 +1,6 @@
 # Opaque-origin renderer
 
-Browzen's host.js, compiler.js and content-entry.js are project source. This renderer does not run the historical Scramjet client or require a Service Worker/content subdomain.
+Browzen's host.js, compiler.js, compile-client.js, compiler-worker.js, resource-policy.js, css-rewrite.js and content-entry.js are project source. The compiler Worker parses and rewrites scripts without executing website code. This renderer does not run the historical Scramjet client or require a Service Worker/content subdomain.
 
 Vendored dependencies retain their own licenses (included alongside this file):
 

@@ -1,7 +1,8 @@
 import {addressToURL,validateRemote} from './url-policy.js';
 import {createSiteControls,permissionNames} from './site-controls.js';
 import {webOrigin} from './config.js';
-import {createOpaqueHost} from './single/host.js';
+import {createOpaqueHost} from './single/host.js?v=20261113-6';
+import {retryableTransport} from './retry-policy.js?v=20261113-6';
 const $=s=>document.querySelector(s);
 const WEB_BROWSING_SUSPENDED=false;
 const WEB_SAFETY_NOTICE='Website browsing is paused: a WebRTC IP leak was reported. Protection has not been verified. Do not use this preview for anonymous browsing.';
@@ -19,7 +20,7 @@ async function ensureEngine(t){
  if(!globalThis.isSecureContext)throw Error('Browzen requires HTTPS. Open '+webOrigin+'.');
   const frame=document.createElement('iframe');frame.className='content-engine';frame.title='Isolated website content';frame.sandbox='allow-scripts allow-forms';frame.setAttribute('allow',"camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'");frame.hidden=t.id!==active;
   const record={id:t.id,origin:'null',opaque:true,frame,abort:new AbortController(),permissions:{camera:false,microphone:false,geolocation:false}};
-  record.host=createOpaqueHost({record,transport:puterFetch,siteAction:d=>siteControls.handle(record,d),emit:d=>engineEvent(record,d),validate:value=>new URLSearchParams(location.search).has('test')&&/^https:\/\/browzen\.test\//.test(value)?new URL(value):validateRemote(value)});
+  record.host=createOpaqueHost({record,transport:puterFetch,siteAction:d=>siteControls.handle(record,d),emit:d=>engineEvent(record,d),validate:value=>new URLSearchParams(location.search).has('test')&&/^https:\/\/(?:cdn\.)?browzen\.test\//.test(value)?new URL(value):validateRemote(value)});
   records.set(t.id,record);$('#viewport').append(frame);layoutFrame(record);if(t.id===active)frame.id='engine';record.ready=Promise.resolve(record);return record;
 }
 function drawTabs(){
@@ -43,7 +44,7 @@ async function authenticate(){
 }
 async function navigate(value,t=selected(),{form}={}){
  try {
- const url=new URLSearchParams(location.search).has('test')&&/^https:\/\/browzen\.test\/(probe|actions|child|single)\.html(?:[?#].*)?$/.test(value)?value:addressToURL(value,engines[searchEngine][2]);if(url.startsWith('browzen://')){t.url=url;t.title=url.includes('settings')?'Settings':url.includes('about')?'About Browzen':'New Tab';t.error=null;activate(t.id);return;}
+ const url=new URLSearchParams(location.search).has('test')&&/^https:\/\/browzen\.test\/(probe|actions|child|single|rendering)\.html(?:[?#].*)?$/.test(value)?value:addressToURL(value,engines[searchEngine][2]);if(url.startsWith('browzen://')){t.url=url;t.title=url.includes('settings')?'Settings':url.includes('about')?'About Browzen':'New Tab';t.error=null;activate(t.id);return;}
  if(WEB_BROWSING_SUSPENDED&&!(new URLSearchParams(location.search).has('test')&&url.startsWith('https://browzen.test/')))throw Error(WEB_SAFETY_NOTICE);
  await authenticate();t.url=url;t.title=new URL(url).hostname;t.error=null;t.loading=true;if(t.id===active){activate(t.id);status('Preparing this tab…');}else drawTabs();
  await ensureEngine(t);if(t.id===active)activate(t.id);
@@ -52,7 +53,7 @@ async function navigate(value,t=selected(),{form}={}){
 }
 function showError(message){$('#newtab').hidden=true;if($('#engine'))$('#engine').hidden=true;$('#internal').hidden=true;$('#error-page').hidden=false;$('#error-message').textContent=message;$('#loading').hidden=true;status(message);}
 async function puterFetch(data,record){
- if(new URLSearchParams(location.search).has('test')&&/^https:\/\/browzen\.test\/((probe|actions|child|single)\.html|worker\.js|shared\.js)(?:[?#].*)?$/.test(data.url)){
+ if(new URLSearchParams(location.search).has('test')&&/^https:\/\/(?:cdn\.)?browzen\.test\/((probe|actions|child|single|rendering)\.html|worker\.js|shared\.js|order-(block|defer|async|module|module-dep|cors)\.js|slow-image\.svg)(?:[?#].*)?$/.test(data.url)){
   const r=await fetch('/asset/test-fixtures/'+new URL(data.url).pathname.slice(1));let body=await r.arrayBuffer();if(new URL(data.url).pathname==='/child.html'){const echo=JSON.stringify({method:data.method||'GET',query:new URL(data.url).search,body:data.body?new TextDecoder().decode(data.body):''}).replaceAll('&','&amp;').replaceAll('<','&lt;');body=new TextEncoder().encode(new TextDecoder().decode(body)+'<pre id="form-received">'+echo+'</pre>').buffer;}return {status:r.status,statusText:r.statusText,headers:{'content-type':r.headers.get('content-type')},body};
  }
  if(WEB_BROWSING_SUSPENDED)throw Error(WEB_SAFETY_NOTICE);
@@ -66,7 +67,7 @@ async function puterFetch(data,record){
  const method=data.method||'GET';let res;
  for(let attempt=0;;attempt++){
   try{res=await puter.net.fetch(remote.href,{method,headers,body:data.body??undefined,redirect:'manual',credentials:'omit',signal:AbortSignal.any([...(record?[record.abort.signal]:[]),...(data.signal?[data.signal]:[]),AbortSignal.timeout(60000)])});break;}
-  catch(error){if(attempt>=2||!['GET','HEAD'].includes(method.toUpperCase())||record?.abort.signal.aborted||!/channel closed|connection reset|network error/i.test(error.message||''))throw error;}
+  catch(error){if(!retryableTransport(error,method,record?.abort.signal.aborted||data.signal?.aborted,attempt))throw error;await new Promise(resolve=>setTimeout(resolve,150*(attempt+1)));}
  }
  const raw={};for(const [k,v] of res.headers)raw[k]=v;
  if(typeof res.headers.getSetCookie==='function'){const cookies=res.headers.getSetCookie();if(cookies.length)raw['set-cookie']=cookies;}
@@ -85,7 +86,7 @@ function engineEvent(record,d){
  if(d.type==='site-document'){siteControls.document(record,d);return;}
  if(d.type==='site-action-error'){status(d.error);return;}
  const t=tabs.find(t=>t.id===d?.id);if(!t)return;
- if(d.type==='tab-update'){if(d.url)t.url=d.url;if(d.title)t.title=d.title;t.loading=!!d.loading;if(t.id===active){$('#address').value=t.url;$('#destination').textContent=t.url;$('#loading').hidden=!t.loading;status(t.loading?'Loading '+t.url:'');}drawTabs();}
+ if(d.type==='tab-update'){if(d.url)t.url=d.url;if(d.title)t.title=d.title;if('loading'in d)t.loading=!!d.loading;if(t.id===active){$('#address').value=t.url;$('#destination').textContent=t.url;$('#loading').hidden=!t.loading;status(t.loading?'Loading '+t.url:'');}drawTabs();}
 }
 async function checkIP(){const b=$('#check-ip');b.disabled=true;$('#egress').textContent='Checking…';
  if(WEB_BROWSING_SUSPENDED){$('#egress').textContent='Browsing paused';$('#egress-time').textContent='A connection IP does not establish WebRTC protection.';return;}

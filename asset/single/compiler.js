@@ -16,7 +16,12 @@ export function rewriteJS(source,base,module=false){
  }
  collect(ast,{names:new Set(),parent:null,func:true});
  function local(name,s){for(;s;s=s.parent)if(s.names.has(name))return true;return false;}
+ function property(n){return n?.type==='MemberExpression'?n.computed?n.property.type==='Literal'?n.property.value:null:n.property.name:null;}
+ function isWindow(n,s){return n?.type==='Identifier'&&['window','self','globalThis','parent','top'].includes(n.name)&&!local(n.name,s)||property(n)==='defaultView'&&isDocument(n.object,s);}
+ function isDocument(n,s){return n?.type==='Identifier'&&n.name==='document'&&!local('document',s)||property(n)==='document'&&isWindow(n.object,s);}
  function visit(n,s,p,key){s=scopes.get(n)||s;
+  if(property(n)==='location'&&(isDocument(n.object,s)||isWindow(n.object,s))){edits.push([n.start,n.end,'__bzn.location']);return;}
+  if(property(n)==='defaultView'&&isDocument(n.object,s)){edits.push([n.start,n.end,'__bzn.window']);return;}
   if(n.type==='ImportDeclaration'||n.type==='ExportNamedDeclaration'||n.type==='ExportAllDeclaration')if(n.source){const alias='bzn:'+new URL(n.source.value,base).href;imports.push({alias,url:new URL(n.source.value,base).href});edits.push([n.source.start,n.source.end,JSON.stringify(alias)]);}
   if(n.type==='ImportExpression'){edits.push([n.start,n.source.start,'__bzn.importModule('],[n.source.end,n.end,','+JSON.stringify(base)+')']);}
   if(n.type==='MetaProperty'&&n.meta.name==='import')edits.push([n.start,n.end,'({url:'+JSON.stringify(base)+'})']);
@@ -30,6 +35,7 @@ export function rewriteJS(source,base,module=false){
  }
  visit(ast,null,null,'');
  const unique=new Map();for(const e of edits)unique.set(e[0]+':'+e[1],e);
- for(const [start,end,value]of [...unique.values()].sort((a,b)=>b[0]-a[0]))source=source.slice(0,start)+value+source.slice(end);
- return {source,imports};
+ // Assemble once. Repeatedly splicing multi-megabyte bundles was quadratic.
+ const chunks=[];let cursor=0;for(const [start,end,value]of [...unique.values()].sort((a,b)=>a[0]-b[0]||a[1]-b[1])){if(start<cursor)throw new SyntaxError('Overlapping script rewrite.');chunks.push(source.slice(cursor,start),value);cursor=end;}chunks.push(source.slice(cursor));
+ return {source:chunks.join(''),imports};
 }

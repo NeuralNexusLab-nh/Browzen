@@ -1,6 +1,7 @@
 import {CookieJar} from './vendor.js';
-import {rewriteJS} from './compiler.js';
-import {rewriteCSS} from './css-rewrite.js';
+import {compileJS} from './compile-client.js?v=20261113-6';
+import {rewriteCSS,neutralizeCSS} from './css-rewrite.js?v=20261113-6';
+import {sourcePolicy,scriptKinds,verifyIntegrity} from './resource-policy.js?v=20261113-6';
 import {secureUUID} from '../session-id.js';
 // Trusted-side transport. No target source executes in this realm.
 const MAX_BYTES=96*1024*1024,MAX_RESOURCES=400;
@@ -9,10 +10,13 @@ let bootstrap;
 export function createOpaqueHost({record,transport,siteAction,emit,validate}){
  let port,generation=0,resources=new Map(),bytes=0,count=0,requestCount=0,pageURL='',scope='',history=[],cursor=-1,stopped=false,noScript=false,level='standard';
  const parentBlobs=new Set();
+ let started=0;
+ const clock=()=>globalThis.performance?.now?.()??Date.now();
+ const metric=(name,value)=>record.frame.setAttribute?.('data-'+name,String(Math.round(value)));
  let documentAbort=new AbortController(),startupTimer;
  const jars=new Map(),stores=new Map();let partition;
  let concurrent=0;const waiting=[];
- async function transmit(data){if(waiting.length>=128)throw Error('Too many queued website requests.');if(concurrent>=8)await new Promise((resolve,reject)=>waiting.push({resolve,reject}));else concurrent++;try{if(stopped||record.retired||data.signal.aborted)throw Error('Website session closed.');return await transport(data,record);}finally{const next=waiting.shift();if(next)next.resolve();else concurrent--;}}
+ async function transmit(data){if(waiting.length>=128)throw Error('Too many queued website requests.');if(concurrent>=8)await new Promise((resolve,reject)=>{waiting.push({resolve,reject,priority:data.priority||0});waiting.sort((a,b)=>b.priority-a.priority);});else concurrent++;try{if(stopped||record.retired||data.signal.aborted)throw Error('Website session closed.');return await transport(data,record);}finally{const next=waiting.shift();if(next)next.resolve();else concurrent--;}}
  function jar(){if(!jars.has(partition)){if(jars.size>=32)jars.delete(jars.keys().next().value);jars.set(partition,new CookieJar());}return jars.get(partition);}
  function target(value,base=pageURL){const u=new URL(value,base||undefined);return validate(u.href).href;}
  function update(data){emit({type:'tab-update',id:record.id,...data});}
@@ -26,79 +30,91 @@ export function createOpaqueHost({record,transport,siteAction,emit,validate}){
   for(const k of Object.keys(headers))if(/^(cookie|host|origin|referer|sec-|proxy-)/i.test(k))delete headers[k];
   const credentials=options.credentials!=='omit'&&(options.credentials==='include'||new URL(url).origin===new URL(pageURL||url).origin);
   if(credentials){const cookie=jar().getCookieStringSync(url);if(cookie)headers.Cookie=cookie;}
-  const response=await transmit({url,method,headers,body:options.body,signal});
+  const response=await transmit({url,method,headers,body:options.body,signal,priority:options.priority||0});
   if(stopped||epoch!==generation)throw Error('Website document changed.');bytes+=response.body?.byteLength||0;if(bytes>MAX_BYTES)throw Error('This page exceeded the 96 MB session transfer limit.');
+  metric('request-count',requestCount);metric('received-bytes',bytes);
   const h=Object.fromEntries(Object.entries(response.headers||{}).map(([k,v])=>[k.toLowerCase(),v]));
   const cookies=h['set-cookie'];if(credentials&&cookies)for(const cookie of (Array.isArray(cookies)?cookies:[cookies]).slice(0,128))try{if(typeof cookie==='string'&&cookie.length<=4096)store.setCookieSync(cookie,url);}catch{}
-  if([301,302,303,307,308].includes(response.status)&&h.location){const next=target(h.location,url);const change=response.status===303||([301,302].includes(response.status)&&method==='POST');return request(next,{...options,method:change?'GET':method,body:change?undefined:options.body},depth+1);}
+  if([301,302,303,307,308].includes(response.status)&&h.location){const next=target(h.location,url);const change=response.status===303||([301,302].includes(response.status)&&method==='POST');const headers={...options.headers};if(new URL(next).origin!==new URL(url).origin)for(const k of Object.keys(headers))if(k.toLowerCase()==='authorization')delete headers[k];return request(next,{...options,headers,method:change?'GET':method,body:change?undefined:options.body},depth+1);}
   delete h['set-cookie'];delete h['set-cookie2'];return {...response,headers:h,url};
  }
  async function css(text,base,chain=new Set()){
   return rewriteCSS(text,base,resource,chain);
  }
  const inFlight=new Map();
- async function resource(raw,base,kind='binary',chain=new Set()){
-  const epoch=generation;if(/^data:/i.test(raw))return raw;const url=target(raw,base),key=kind+':'+url;
+ async function resource(raw,base,kind='binary',chain=new Set(),integrity=''){
+  if(!['binary','style',...scriptKinds].includes(kind))throw new TypeError('Unsupported resource type.');
+  if(String(integrity).length>2048)throw new TypeError('Integrity metadata is too large.');
+  const epoch=generation;if(/^data:/i.test(raw))return raw;const url=target(raw,base),key=kind+':'+url+':'+integrity;
   if(inFlight.has(key)){const old=inFlight.get(key);if(chain.has(key))return old.id;await old.promise;return old.id;}
   if(++count>MAX_RESOURCES)throw Error('This page exceeded the 400-resource limit.');
   const id='r'+count;let done,fail;const promise=new Promise((a,b)=>{done=a;fail=b;});promise.catch(()=>{});inFlight.set(key,{id,promise});
-  try{const r=await request(url,{credentials:'same-origin'});if(r.status>=400)throw Error('Resource returned HTTP '+r.status);const type=String(r.headers['content-type']||'application/octet-stream');let body=r.body;const next=new Set([...chain,key]);let imports=[];
-   const cross=new URL(r.url).origin!==new URL(pageURL).origin,allow=r.headers['access-control-allow-origin'];
-   if(cross&&allow!=='*'&&allow!==new URL(pageURL).origin){if(kind!=='binary')throw Error('Cross-origin source was not permitted by its server.');const opaqueURL=URL.createObjectURL(new Blob([body],{type}));parentBlobs.add(opaqueURL);resources.set(id,{id,url:r.url,type,opaqueURL});done();return id;}
+  try{const r=await request(url,{credentials:'same-origin',priority:scriptKinds.has(kind)?3:kind==='style'?2:0});if(r.status>=400)throw Error('Resource returned HTTP '+r.status);const type=String(r.headers['content-type']||'application/octet-stream');let body=r.body;const next=new Set([...chain,key]);let imports=[];
+   const policy=sourcePolicy(kind,r.url,new URL(pageURL).origin,r.headers);await verifyIntegrity(body,integrity);
+   if(policy.opaque&&kind==='binary'){const opaqueURL=URL.createObjectURL(new Blob([body],{type}));parentBlobs.add(opaqueURL);resources.set(id,{id,url:r.url,type,opaqueURL});done();return id;}
    if(kind==='style'){body=await css(new TextDecoder().decode(body),r.url,next);}
-   if(kind==='script'||kind==='module'){const out=rewriteJS(new TextDecoder().decode(body),r.url,kind==='module');body=out.source;imports=out.imports;for(const dep of imports)dep.id=await resource(dep.url,r.url,'module',next);}
-   if(epoch!==generation)throw Error('Website document changed.');resources.set(id,{id,url:r.url,type:kind==='style'?'text/css':kind==='script'||kind==='module'?'text/javascript':type,body,imports});done();return id;
+   if(policy.script){const out=await compileJS(new TextDecoder().decode(body),r.url,kind==='module');if(epoch!==generation)throw Error('Website document changed.');body=out.source;imports=out.imports;for(const dep of imports){if(epoch!==generation)throw Error('Website document changed.');dep.id=await resource(dep.url,r.url,'module',next);}}
+   if(epoch!==generation)throw Error('Website document changed.');
+   // Opaque frames cannot load parent-origin Blob scripts/styles in Chromium.
+   // Only validated, unauthenticated classic JS/CSS may cross this broker path.
+   // Fetch/module APIs still enforce CORS. This is not native source-opacity.
+   resources.set(id,{id,url:r.url,type:kind==='style'?'text/css':policy.script?'text/javascript':type,body,imports,module:kind==='module',corsReadable:!policy.opaque});done();return id;
   }catch(e){if(epoch===generation)inFlight.delete(key);fail(e);throw e;}
  }
  async function html(source,base){
-  const template=document.createElement('template');template.innerHTML=source;const root=template.content;const scripts=[],jobs=[];let effective=base;
+  const template=document.createElement('template');template.innerHTML=source;const root=template.content;const scripts=[];let effective=base;
   const baseNode=root.querySelector('base[href]');if(baseNode)try{effective=target(baseNode.getAttribute('href'),base);}catch{}
   root.querySelectorAll('base,meta[http-equiv],iframe,frame,frameset,object,embed,portal').forEach(n=>n.remove());
   for(const el of root.querySelectorAll('*')){
    const tag=el.tagName.toLowerCase();
    for(const attr of [...el.attributes]){
     const k=attr.name.toLowerCase(),v=attr.value;
-    if(k.startsWith('on')){el.removeAttribute(attr.name);if(!noScript)try{el.setAttribute('data-bzn-'+k,rewriteJS(v,effective).source);}catch{}continue;}
-    if(k==='srcset'&&['img','source'].includes(tag)){el.removeAttribute(attr.name);const first=v.split(',')[0].trim().split(/\s+/)[0];if(first&&!first.startsWith('data:'))jobs.push(resource(first,effective).then(id=>el.setAttribute(tag==='source'?'srcset':'src','bzn-resource:'+id)).catch(()=>{}));continue;}
-    if(['ping','integrity','nonce','crossorigin','srcdoc','manifest','background','codebase','archive','formaction','srcset','imagesrcset'].includes(k)){el.removeAttribute(attr.name);if(k==='formaction')el.setAttribute('data-bzn-formaction',v);continue;}
+    if(k.startsWith('on')){el.removeAttribute(attr.name);if(!noScript)el.setAttribute('data-bzn-'+k,v);continue;}
+    if(k==='srcset'&&['img','source'].includes(tag)){el.removeAttribute(attr.name);const first=v.split(',')[0].trim().split(/\s+/)[0];if(first&&!first.startsWith('data:'))el.setAttribute('data-bzn-'+(tag==='source'?'srcset':'src'),first);continue;}
+    if(['ping','integrity','nonce','crossorigin','srcdoc','manifest','background','codebase','archive','formaction','srcset','imagesrcset'].includes(k)){el.removeAttribute(attr.name);if(['formaction','integrity','crossorigin'].includes(k))el.setAttribute('data-bzn-'+k,v);continue;}
     if(k==='src'||k==='href'||k==='xlink:href'||k==='action'||k==='poster'||k==='data'){
      el.removeAttribute(attr.name);el.setAttribute('data-bzn-'+k,v);
      if((tag==='a'||tag==='area')&&k==='href'){el.setAttribute('href','#');continue;}
      if(tag==='script'||tag==='link'||tag==='form'||k==='action'||tag==='use')continue;
      if(/^data:/i.test(v)){el.setAttribute(k,v);continue;}
-     if((k==='src'&&['img','audio','video','source','track','input'].includes(tag))||k==='poster'||(tag==='image'&&k.endsWith('href')))jobs.push(resource(v,effective).then(id=>el.setAttribute(k,'bzn-resource:'+id)).catch(()=>{}));
     }
    }
-   if(el.hasAttribute('style'))jobs.push(css(el.getAttribute('style'),effective).then(v=>el.setAttribute('style',v)));
-   if(tag==='style')jobs.push(css(el.textContent,effective).then(v=>el.textContent=v));
+   if(el.hasAttribute('style')){el.setAttribute('data-bzn-style',el.getAttribute('style'));el.setAttribute('style',neutralizeCSS(el.getAttribute('style')));}
+   if(tag==='style'){el.setAttribute('data-bzn-css',el.textContent);el.textContent=neutralizeCSS(el.textContent);}
    if(tag==='link'){
-    const rel=(el.getAttribute('rel')||'').toLowerCase(),href=el.getAttribute('data-bzn-href');if(rel==='stylesheet'&&href){el.removeAttribute('rel');jobs.push(resource(href,effective,'style').then(id=>{el.setAttribute('rel','stylesheet');el.setAttribute('href','bzn-resource:'+id);}).catch(()=>{}));}else el.remove();
+    const rel=(el.getAttribute('rel')||'').toLowerCase(),href=el.getAttribute('data-bzn-href');if(!(rel==='stylesheet'&&href))el.remove();
    }
    if(tag==='script'){
     const type=(el.getAttribute('type')||'').toLowerCase(),module=type==='module';if(type&&!module&&!/^(text|application)\/(javascript|ecmascript)$/.test(type))continue;
     const placeholder=document.createElement('template'),index=scripts.length;placeholder.setAttribute('data-bzn-script',index);el.replaceWith(placeholder);
-    if(noScript){scripts.push(null);continue;}const script={module,attrs:[...el.attributes].filter(a=>a.name!=='src').map(a=>[a.name,a.value]),source:'',url:effective,imports:[]};scripts.push(script);
-    const src=el.getAttribute('data-bzn-src');jobs.push((async()=>{try{if(src){const id=await resource(src,effective,module?'module':'script');script.resource=id;script.url=resources.get(id).url;}else{const out=rewriteJS(el.textContent,effective,module);script.source=out.source;script.imports=out.imports;for(const dep of out.imports)dep.id=await resource(dep.url,effective,'module');}}catch(e){script.source='console.warn('+JSON.stringify('Browzen blocked a script: '+e.message)+')';}})());
+    if(noScript){scripts.push(null);continue;}const script={module,async:el.hasAttribute('async'),defer:el.hasAttribute('defer'),nomodule:el.hasAttribute('nomodule'),cors:el.hasAttribute('data-bzn-crossorigin'),integrity:el.getAttribute('data-bzn-integrity')||'',attrs:[...el.attributes].filter(a=>a.name!=='src').map(a=>[a.name,a.value]),source:'',url:effective,imports:[]};scripts.push(script);
+    const src=el.getAttribute('data-bzn-src');try{if(src){script.url=target(src,effective);script.external=true;}else{script.source=el.textContent;script.raw=true;}}catch(e){script.error=e.message;}
    }
   }
-  await Promise.all(jobs);return {html:template.innerHTML,scripts,base:effective};
+  return {html:template.innerHTML,scripts,base:effective};
  }
  function cookieText(){try{return jar().getCookieStringSync(pageURL,{http:false});}catch{return '';}}
  async function connect(payload,token){
-  const code=await(bootstrap??=fetch('/asset/single/content.js').then(r=>{if(!r.ok)throw Error('Website sandbox bundle unavailable.');return r.text();}));if(token!==generation||stopped)return;
-  const pair=new MessageChannel();port?.close();port=pair.port1;let unexpected=0;
-  port.onmessage=async e=>{const d=e.data;if(!d||token!==generation||stopped)return;const reply=(result,error)=>{if(d.rpc)port.postMessage({rpc:d.rpc,result,error});};
+  const code=await(bootstrap??=fetch('/asset/single/content.js?v=20261113-6').then(r=>{if(!r.ok)throw Error('Website sandbox bundle unavailable.');return r.text();}));if(token!==generation||stopped)return;
+  const pair=new MessageChannel();port?.close();port=pair.port1;const channelPort=port;let unexpected=0;
+  const sentResources=new Set((payload.resources||[]).map(r=>r.id));
+  function delta(){const list=[...resources.values()].filter(r=>!sentResources.has(r.id));for(const r of list)sentResources.add(r.id);return list;}
+  port.onmessage=async e=>{const d=e.data;if(!d||token!==generation||stopped)return;const reply=(result,error)=>{if(d.rpc&&token===generation&&channelPort===port&&!stopped)channelPort.postMessage({rpc:d.rpc,result,error});};
    try{
     if(d.type==='ready'){clearTimeout(startupTimer);port.postMessage({type:'document',...payload});return;}
-    if(d.type==='loaded'){update({url:pageURL,title:d.title||new URL(pageURL).hostname,loading:false});return;}
+    if(d.type==='paint'){metric('first-content-ms',clock()-started);return;}
+    if(d.type==='dom-ready'){metric('dom-ready-ms',clock()-started);return;}
+    if(d.type==='script-error'){metric('script-errors',Number(d.count)||0);return;}
+    if(d.type==='loaded'){metric('script-errors',Number(d.scriptErrors)||0);metric('load-ms',clock()-started);update({url:pageURL,title:d.title||new URL(pageURL).hostname,loading:false});return;}
     if(d.type==='title'){update({title:String(d.title).slice(0,240)});return;}
     if(d.type==='navigate'){await navigate(d.url,{form:d.form});return;}
     if(d.type==='history'){const url=target(d.url);if(new URL(url).origin!==new URL(pageURL).origin)throw Error('History cannot change origin.');pageURL=url;update({url});return;}
     if(d.type==='cookie'){try{if(typeof d.value==='string'&&d.value.length<=4096)jar().setCookieSync(d.value,pageURL,{http:false});}catch{}port.postMessage({type:'cookies',value:cookieText()});return;}
     if(d.type==='store'){if(!['local','session'].includes(d.kind)||!d.values||typeof d.values!=='object')return;const text=JSON.stringify(d.values);if(text.length>1024*1024)throw Error('Website storage exceeds 1 MB.');if(stores.size>=64)stores.delete(stores.keys().next().value);stores.set(partition+':'+new URL(pageURL).origin+':'+d.kind,d.values);return;}
     if(d.type==='site-action'){reply(await siteAction({...d,scope:{id:scope,origin:new URL(pageURL).origin,topOrigin:new URL(pageURL).origin,isMain:true}}));return;}
-    if(d.type==='compile'){if(typeof d.source!=='string'||d.source.length>4*1024*1024)throw Error('Script source exceeds the 4 MB limit.');reply(rewriteJS(d.source,target(d.base||pageURL),!!d.module));return;}
-    if(d.type==='resource'){const id=await resource(d.url,d.base||pageURL,d.kind);reply({id,resources:[...resources.values()]});return;}
+    if(d.type==='compile'){if(typeof d.source!=='string'||d.source.length>4*1024*1024)throw Error('Script source exceeds the 4 MB limit.');reply(await compileJS(d.source,target(d.base||pageURL),!!d.module));return;}
+    if(d.type==='resource'){const id=await resource(d.url,d.base||pageURL,d.kind,new Set(),d.integrity||'');reply({id,resources:delta()});return;}
+    if(d.type==='css'){if(typeof d.source!=='string'||d.source.length>2*1024*1024)throw Error('CSS source exceeds the limit.');const result=await css(d.source,target(d.base||pageURL));reply({css:result,resources:delta()});return;}
     if(d.type==='fetch'){
      const origin=new URL(pageURL).origin,url=target(d.url),cross=new URL(url).origin!==origin;
      const method=String(d.method||'GET').toUpperCase(),headers=new Headers(d.headers||{});
@@ -118,10 +134,12 @@ export function createOpaqueHost({record,transport,siteAction,emit,validate}){
  async function navigate(raw,options={}){
   documentAbort.abort();documentAbort=new AbortController();clearTimeout(startupTimer);
   const token=++generation;pageURL=target(raw);partition=new URL(pageURL).hostname;bytes=0;count=0;requestCount=0;resources=new Map();inFlight.clear();for(const u of parentBlobs)URL.revokeObjectURL(u);parentBlobs.clear();scope=secureUUID();noScript=!!(options.noScript??requestedNoScript)||level==='safest'||(level==='safer'&&pageURL.startsWith('http:'));
+  started=clock();metric('first-content-ms',0);metric('dom-ready-ms',0);metric('load-ms',0);
   emit({type:'site-document',id:record.id,isMain:true,scopeId:scope,origin:new URL(pageURL).origin});update({url:pageURL,loading:true});
   try{
    let form=options.form,body,method='GET',headers={};if(form){method=(form.method||'get').toUpperCase();const params=new URLSearchParams();for(const [k,v]of form.entries||[])params.append(k,typeof v==='string'?v:v.name);if(method==='GET'){const u=new URL(pageURL);u.search=params.toString();pageURL=u.href;}else if(form.enctype==='multipart/form-data'){const data=new FormData();for(const [k,v]of form.entries||[])data.append(k,v);const encoded=new Response(data);body=await encoded.arrayBuffer();headers['Content-Type']=encoded.headers.get('content-type');}else if(form.enctype==='text/plain'){body=new TextEncoder().encode([...params].map(([k,v])=>k+'='+v).join('\r\n')+'\r\n').buffer;headers['Content-Type']='text/plain';}else{body=new TextEncoder().encode(params.toString()).buffer;headers['Content-Type']='application/x-www-form-urlencoded';}}
-   const response=await request(pageURL,{method,headers,body,credentials:'include'});if(token!==generation)return;pageURL=response.url;const contentType=String(response.headers['content-type']||'');let documentSource=new TextDecoder().decode(response.body);
+   update({url:pageURL});
+   const response=await request(pageURL,{method,headers,body,credentials:'include',priority:4});if(token!==generation)return;metric('document-ms',clock()-started);pageURL=response.url;update({url:pageURL});const contentType=String(response.headers['content-type']||'');let documentSource=new TextDecoder().decode(response.body);
    if(!/text\/html|application\/xhtml\+xml/.test(contentType))documentSource='<pre>'+documentSource.replaceAll('&','&amp;').replaceAll('<','&lt;')+'</pre>';
    const payload=await html(documentSource,pageURL);if(token!==generation)return;
    if(!options.traverse){history=history.slice(0,cursor+1);history.push(pageURL);cursor=history.length-1;}

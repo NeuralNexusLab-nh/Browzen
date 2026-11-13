@@ -1,7 +1,7 @@
 import {addressToURL,validateRemote} from './url-policy.js';
 import {createSiteControls,permissionNames} from './site-controls.js?v=20261113-9';
 import {webOrigin} from './config.js';
-import {createOpaqueHost} from './single/host.js?v=20261114-1';
+import {createOpaqueHost,createWebsiteSession} from './single/host.js?v=20261114-3';
 import {retryableTransport} from './retry-policy.js?v=20261113-7';
 import {abortable} from './transport-guard.js?v=20261114-2';
 const $=s=>document.querySelector(s);
@@ -10,6 +10,7 @@ const WEB_SAFETY_NOTICE='Website browsing is paused: a WebRTC IP leak was report
 if(WEB_BROWSING_SUSPENDED){const safetyBanner=document.createElement('div');safetyBanner.className='security-incident';safetyBanner.role='alert';safetyBanner.textContent=WEB_SAFETY_NOTICE;$('#chrome').after(safetyBanner);}
 $('#engine')?.remove();document.querySelector('.quicklinks')?.remove();
 const tabs=[],records=new Map();let active,sequence=0,requests=0,egress=null,noScript=false,zoom=100,authenticated=false;
+let websiteSession=createWebsiteSession();
 const engines=[['DuckDuckGo','duckduckgo.ico','https://duckduckgo.com/?q='],['Google','google.ico','https://www.google.com/search?q='],['Bing','bing.ico','https://www.bing.com/search?q='],['Brave','brave.ico','https://search.brave.com/search?q='],['Startpage','startpage.ico','https://www.startpage.com/sp/search?query='],['Yahoo','yahoo.ico','https://search.yahoo.com/search?p='],['Yandex','yandex.ico','https://yandex.com/search/?text='],['Baidu','baidu.ico','https://www.baidu.com/s?wd='],['360 Search','360.ico','https://www.so.com/s?q=']];
 let searchEngine=0,securityLevel='standard',lastCleanup='No identity refresh yet.',siteControls;
 function status(value){$('#status').textContent=value;}
@@ -21,7 +22,7 @@ async function ensureEngine(t){
  if(!globalThis.isSecureContext)throw Error('Browzen requires HTTPS. Open '+webOrigin+'.');
   const frame=document.createElement('iframe');frame.className='content-engine';frame.title='Isolated website content';frame.sandbox='allow-scripts allow-forms';frame.setAttribute('allow',"camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'");frame.hidden=t.id!==active;
   const record={id:t.id,origin:'null',opaque:true,frame,abort:new AbortController(),permissions:{camera:false,microphone:false,geolocation:false}};
-  record.host=createOpaqueHost({record,transport:puterFetch,siteAction:d=>siteControls.handle(record,d),emit:d=>engineEvent(record,d),validate:value=>new URLSearchParams(location.search).has('test')&&/^https:\/\/(?:cdn\.)?browzen\.test\//.test(value)?new URL(value):validateRemote(value)});
+  record.host=createOpaqueHost({record,session:websiteSession,transport:puterFetch,siteAction:d=>siteControls.handle(record,d),emit:d=>engineEvent(record,d),validate:value=>new URLSearchParams(location.search).has('test')&&/^https:\/\/(?:cdn\.)?browzen\.test\//.test(value)?new URL(value):validateRemote(value)});
   records.set(t.id,record);$('#viewport').append(frame);layoutFrame(record);if(t.id===active)frame.id='engine';record.ready=Promise.resolve(record);return record;
 }
 function drawTabs(){
@@ -63,7 +64,7 @@ async function puterFetch(data,record){
  // Never copy the Puter account token or this application's own headers.
  for(const k of Object.keys(headers))if(['proxy-authorization','content-length','connection','accept-encoding'].includes(k.toLowerCase()))delete headers[k];
  for(const k of Object.keys(headers))if(k.toLowerCase().startsWith('sec-ch-'))delete headers[k];
- headers['Accept-Language']='en-US,en;q=0.9';headers['User-Agent']=navigator.userAgent;headers['DNT']='1';headers['Sec-GPC']='1';
+ headers['Accept-Language']='en-US,en;q=0.9';headers['User-Agent']=navigator.userAgent.replace(/\s+Browzen(?:\/[^\s]+)?$/,'')+' Browzen';headers['DNT']='1';headers['Sec-GPC']='1';
  requests++;
  const method=data.method||'GET',signal=AbortSignal.any([...(record?[record.abort.signal]:[]),...(data.signal?[data.signal]:[]),AbortSignal.timeout(60000)]);let res;
  for(let attempt=0;;attempt++){
@@ -117,19 +118,19 @@ $('#panel').addEventListener('beforetoggle',e=>$('#control').setAttribute('aria-
 identityButton.addEventListener('click',()=>$('#browser-menu').hidePopover());
 async function retire(record){if(!record)return true;if(record.cleanup)return record.cleanup;record.retired=true;siteControls?.cancel(record);record.abort.abort();record.frame.hidden=true;if(record.host){record.host.destroy();record.frame.remove();records.delete(record.id);return true;}record.cleanup=(async()=>{let timer;const clean=await new Promise(resolve=>{record.cleanupResolve=resolve;record.port?.postMessage({type:'clear'});timer=setTimeout(()=>resolve(false),6500);});clearTimeout(timer);record.port?.close();record.frame.remove();records.delete(record.id);return clean;})();return record.cleanup;}
 async function refreshTab(){const t=selected();if(t.url.startsWith('browzen://')){activate(t.id);return;}const clean=await retire(records.get(t.id));if(!clean)lastCleanup='A retired website storage deletion is pending. Its old origin is not reused.';await navigate(t.url,t);}
-async function refreshIdentity(){status('Clearing website sessions…');const outcomes=await Promise.all([...records.values()].map(retire));tabs.splice(0);noScript=false;$('#noscript').checked=false;newTab();lastCleanup=outcomes.every(Boolean)?'Website storage cleared. Puter remains signed in.':'Old website origins were retired. Some storage deletion is pending.';status(outcomes.every(Boolean)?'':lastCleanup);checkIP();$('#address').focus();}
+async function refreshIdentity(){status('Clearing website sessions…');const outcomes=await Promise.all([...records.values()].map(retire));websiteSession=createWebsiteSession();tabs.splice(0);noScript=false;$('#noscript').checked=false;newTab();lastCleanup=outcomes.every(Boolean)?'Website storage cleared. Puter remains signed in.':'Old website origins were retired. Some storage deletion is pending.';status(outcomes.every(Boolean)?'':lastCleanup);checkIP();$('#address').focus();}
 async function renderInternal(url){
  const box=$('#internal');box.hidden=false;box.replaceChildren();
  if(!document.querySelector('#product-pages-style')){const link=document.createElement('link');link.id='product-pages-style';link.rel='stylesheet';link.href='/asset/product-pages.css';document.head.append(link);}
  if(url.includes('settings')){
   const html=await(await fetch('/asset/settings.html')).text();if(selected().url!==url)return;const doc=new DOMParser().parseFromString(html,'text/html');box.append(document.importNode(doc.querySelector('.settings-layout'),true));box.classList.add('product-settings');
   box.querySelectorAll('img').forEach(img=>img.src='/asset/logo.svg');
-  const securityNotes=['Website scripts enabled. Native opaque-origin sandbox and permission controls stay active.','Scripts are blocked on unencrypted HTTP websites.','All website scripts blocked. Some websites will not work.'];
+  const securityNotes=['Compatibility first: scripts, native fonts, graphics and audio enabled. Account isolation and network controls stay active.','Scripts are blocked on unencrypted HTTP websites.','All website scripts blocked. Some websites will not work.'];
   box.querySelectorAll('.security-choice').forEach((b,i)=>{b.querySelector('span:not(.level-symbol)').textContent=securityNotes[i];b.classList.toggle('active',b.dataset.value===securityLevel);b.onclick=()=>{securityLevel=b.dataset.value;for(const t of tabs)if(!t.url.startsWith('browzen://'))command('security',{id:t.id,level:securityLevel});renderInternal(url);};});
   box.querySelector('#security .subtle-badge').textContent='Applies immediately';
   const conn=box.querySelector('#connection');conn.querySelector('h2').textContent='Puter & connection';conn.querySelector('.section-heading p').textContent='Your website connection, in one place.';conn.querySelector('#tor-state').textContent='Puter';
   const rows=conn.querySelectorAll('.settings-row');rows[0].querySelector('strong').textContent='Connection IP';rows[0].querySelector('p').textContent='Check the network exit observed for a Puter request.';rows[0].querySelector('button').textContent='View connection';rows[1].remove();
-  box.querySelector('#session .section-heading p').textContent='Separate website sessions for each tab.';box.querySelector('#session .settings-row strong').textContent='Refresh Identity';box.querySelector('#session .settings-row p').textContent='Closes website tabs and clears their cookies, storage and caches. Your Puter sign-in stays available.';box.querySelector('.settings-details p').textContent=lastCleanup+' The outer browser and operating system can retain other records; this is not secure erasure.';
+  box.querySelector('#session .section-heading p').textContent='Website cookies and local storage are shared within this Browzen session, with normal domain and origin boundaries.';box.querySelector('#session .settings-row strong').textContent='Refresh Identity';box.querySelector('#session .settings-row p').textContent='Closes website tabs and clears their cookies, storage and caches. Your Puter sign-in stays available.';box.querySelector('.settings-details p').textContent=lastCleanup+' The outer browser and operating system can retain other records; this is not secure erasure.';
   box.querySelectorAll('[data-action]').forEach(b=>{const action=b.dataset.action;if(action==='theme'){const chosen=document.body.classList.contains('light')===(b.dataset.value==='light');b.classList.toggle('active',chosen);b.setAttribute('aria-pressed',String(chosen));b.onclick=()=>{document.body.classList.toggle('light',b.dataset.value==='light');document.documentElement.dataset.theme=b.dataset.value;renderInternal(url);};}else if(action==='newidentity'){b.textContent='Refresh Identity';b.onclick=()=>refreshIdentity();}else if(action==='control'||action==='connection')b.onclick=()=>{$('#panel').showPopover();checkIP();};});
   box.querySelector('.settings-nav a[href="#connection"]').textContent='Puter & connection';
   const extra=document.createElement('div');extra.className='settings-row';extra.innerHTML='<label for="motion">Reduce motion</label><input id="motion" type="checkbox" role="switch">';box.querySelector('#general').append(extra);$('#motion').checked=document.body.classList.contains('reduce-motion');$('#motion').onchange=e=>document.body.classList.toggle('reduce-motion',e.target.checked);
@@ -139,11 +140,11 @@ async function renderInternal(url){
  }
  if(!url.includes('settings')){const heading=[...box.querySelectorAll('h2')].find(h=>h.textContent==='Privacy in your hands');if(heading)heading.nextElementSibling.textContent='Website pages run in native opaque-origin sandboxes, without access to the Browzen interface or Puter account storage. Website cookies and temporary storage are kept in memory. Camera, microphone, nested frames and website Workers are unavailable in this static version. Clipboard and notifications use explicit Browzen approval. Refresh Identity retires website sessions without signing out of Puter.';}
  box.querySelectorAll('a[href^="browzen://"]').forEach(a=>a.onclick=e=>{e.preventDefault();navigate(a.getAttribute('href'));});
- for(const heading of box.querySelectorAll('h2'))if(heading.textContent==='Privacy in your hands')heading.nextElementSibling.textContent='Each website document runs in an opaque-origin sandbox with temporary, partitioned website state. Device access is unavailable in this web version. Clipboard operations require an explicit prompt. Refresh Identity clears Browzen’s website sessions, not downloaded files or the outer browser’s records.';
+ for(const heading of box.querySelectorAll('h2'))if(heading.textContent==='Privacy in your hands')heading.nextElementSibling.textContent='Browzen prioritizes website compatibility: native fonts, graphics, audio and hardware APIs are not disguised. Instrumented pages default to UTC and en-US; this is not a uniform or anonymous browser fingerprint. Website requests use Puter and direct transports stay restricted. Website cookies and local storage are temporary and shared within this session, without access to your Puter account. Refresh Identity clears website sessions, not downloaded files or the outer browser’s records.';
  box.querySelectorAll('a[href^="https://"],a[href^="browzen://"]').forEach(a=>a.onclick=e=>{e.preventDefault();navigate(a.getAttribute('href'));});
 }
-// Viewport buckets reduce layout variation, not native screen/DPI fingerprinting.
+// Native viewport sizing: do not letterbox or spoof the user's display.
 new ResizeObserver(()=>{for(const record of records.values())layoutFrame(record);}).observe($('#viewport'));
-function layoutFrame(record){const area=$('#viewport').getBoundingClientRect();record.frame.style.width=Math.max(200,Math.floor(area.width/200)*200)+'px';record.frame.style.height=Math.max(100,Math.floor(area.height/100)*100)+'px';record.frame.style.left='50%';record.frame.style.top='50%';record.frame.style.transform='translate(-50%,-50%)';}
+function layoutFrame(record){record.frame.style.width='100%';record.frame.style.height='100%';record.frame.style.left='0';record.frame.style.top='0';record.frame.style.transform='none';}
 siteControls=createSiteControls({records,active:()=>active,newTab,activate,closeTab,navigate,command,status,validateRemote,testMode:new URLSearchParams(location.search).has('test')});
 newTab();showGate('Preparing secure sign-in…');$('#sign-in').disabled=true;checkAuth();

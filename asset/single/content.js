@@ -17,30 +17,14 @@
   for(const key of ['RTCPeerConnection','webkitRTCPeerConnection','mozRTCPeerConnection','RTCIceTransport','RTCDtlsTransport','RTCSctpTransport','WebTransport'])if(key in g)lock(g,key,fail);
   const nav=g.navigator;
   if(nav){
-   read(nav,'hardwareConcurrency',4);if('deviceMemory'in nav)read(nav,'deviceMemory',4);
    read(nav,'language','en-US');read(nav,'languages',Object.freeze(['en-US','en']));
-   if('userAgentData'in nav)read(nav,'userAgentData',undefined);
-   if('gpu'in nav)read(nav,'gpu',undefined);
-   if('connection'in nav)read(nav,'connection',undefined);
+   read(nav,'userAgent',nav.userAgent.replace(/\s+Browzen(?:\/[^\s]+)?$/,'')+' Browzen');
    for(const proto of [g.Navigator?.prototype,g.WorkerNavigator?.prototype])if(proto){
-    for(const [k,v]of Object.entries({hardwareConcurrency:4,language:'en-US',languages:Object.freeze(['en-US','en']),deviceMemory:4,userAgentData:undefined,gpu:undefined,connection:undefined}))if(k in proto)read(proto,k,v);
+    for(const [k,v]of Object.entries({language:'en-US',languages:Object.freeze(['en-US','en'])}))if(k in proto)read(proto,k,v);
    }
-   if(nav.mediaDevices?.enumerateDevices){const empty=async()=>[];lock(nav.mediaDevices,'enumerateDevices',empty);lock(Object.getPrototypeOf(nav.mediaDevices),'enumerateDevices',empty);}
   }
-  if('queryLocalFonts'in g)lock(g,'queryLocalFonts',()=>Promise.reject(new g.DOMException('Local fonts are blocked.','NotAllowedError')));
-  if(g.FontFaceSet?.prototype.check)lock(g.FontFaceSet.prototype,'check',fail);
-  if(g.FontFace){const F=g.FontFace;define(g,'FontFace',{configurable:true,writable:true,value:new Proxy(F,{construct(t,a,n){if(typeof a[1]==='string'&&/local\s*\(/i.test(a[1]))return fail();return Reflect.construct(t,a,n);}})});}
-  if(nav?.getBattery)lock(nav,'getBattery',()=>Promise.reject(new g.DOMException('Battery details blocked.','NotAllowedError')));
-  if(nav?.getGamepads)lock(nav,'getGamepads',()=>[]);
-  for(const key of ['AudioContext','webkitAudioContext','OfflineAudioContext','webkitOfflineAudioContext'])if(key in g)lock(g,key,fail);
-  for(const proto of [g.HTMLCanvasElement?.prototype,g.OffscreenCanvas?.prototype]){
-   if(!proto)continue;const original=proto.getContext;
-   if(original)lock(proto,'getContext',function(type,...args){if(/^(webgl2?|experimental-webgl|webgpu)$/i.test(type))return null;return Reflect.apply(original,this,[type,...args]);});
-  }
-  const canvas=g.HTMLCanvasElement?.prototype;
-  if(canvas){lock(canvas,'toDataURL',fail);lock(canvas,'toBlob',fail);}
-  if(g.OffscreenCanvas)lock(g.OffscreenCanvas.prototype,'convertToBlob',()=>Promise.reject(new g.DOMException('Canvas readback blocked.','SecurityError')));
-  for(const proto of [g.CanvasRenderingContext2D?.prototype,g.OffscreenCanvasRenderingContext2D?.prototype])if(proto?.getImageData)lock(proto,'getImageData',fail);
+  // Rendering, fonts, canvas, audio and hardware information use native behavior.
+  // Only locale/time defaults and network-leak protections are changed here.
   // A session-wide fixed JS UTC/English view, applied to each instrumented realm.
   // Native CSS/font/layout/engine behavior still depends on the outer browser.
   const D=g.Date,p=D.prototype,utcString=p.toUTCString,nativeParse=D.parse;
@@ -64,7 +48,7 @@
   lock(D,'parse',v=>Reflect.apply(nativeParse,D,[parseValue(v)]));
   lock(p,'constructor',dateProxy);
   lock(g,'Date',dateProxy);
-  if('Temporal'in g)lock(g,'Temporal',undefined);
+  if(g.Temporal?.Now?.timeZoneId)lock(g.Temporal.Now,'timeZoneId',()=>'UTC');
   for(const name of ['DateTimeFormat','NumberFormat','Collator','PluralRules','RelativeTimeFormat','ListFormat','DisplayNames','Segmenter']){
    const C=g.Intl?.[name];if(!C)continue;
    const options=a=>{const r=[...a];r[0]??='en-US';if(name==='DateTimeFormat')r[1]={...r[1],timeZone:r[1]?.timeZone||'UTC'};return r;};
@@ -3355,6 +3339,14 @@
       const old = Reflect.getOwnPropertyDescriptor(nativeWindow, key);
       if (!old || old.configurable) Reflect.defineProperty(nativeWindow, key, descriptor);
       return Reflect.defineProperty(target, key, descriptor);
+    }, deleteProperty(target, key) {
+      const own = Reflect.getOwnPropertyDescriptor(target, key), native = Reflect.getOwnPropertyDescriptor(nativeWindow, key);
+      if (own) {
+        if (!own.configurable) return false;
+        if (native?.configurable) Reflect.deleteProperty(nativeWindow, key);
+        return Reflect.deleteProperty(target, key);
+      }
+      return Reflect.deleteProperty(nativeWindow, key);
     }, has: (target, key) => Reflect.has(target, key) || Reflect.has(nativeWindow, key), ownKeys: (target) => [.../* @__PURE__ */ new Set([...Reflect.ownKeys(nativeWindow), ...Reflect.ownKeys(target)])], getOwnPropertyDescriptor(target, key) {
       return Reflect.getOwnPropertyDescriptor(target, key) || ((d) => d ? { ...d, configurable: true } : void 0)(Reflect.getOwnPropertyDescriptor(nativeWindow, key));
     } });

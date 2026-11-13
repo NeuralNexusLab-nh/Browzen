@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {createOpaqueHost}from'./host.js';import {validateRemote}from'../url-policy.js';
+import test from 'node:test';import assert from 'node:assert/strict';import {createOpaqueHost,createWebsiteSession}from'./host.js';import {validateRemote}from'../url-policy.js';
 // Broker unit tests. The fake frame does not execute HTML; native isolation is
 // separately exercised by test-fixtures/single.html in a real browser.
 test('trusted broker: redirects, CORS, cookies, scope binding and cleanup',async t=>{
@@ -9,7 +9,7 @@ test('trusted broker: redirects, CORS, cookies, scope binding and cleanup',async
  let resolveDocument;documentReady=new Promise(r=>resolveDocument=r);
  const frame={contentWindow:{postMessage(data,origin,ports){child=ports[0];child.onmessage=e=>{received.push(e.data);if(e.data.type==='document')resolveDocument(e.data);if(e.data.rpc){pending.get(e.data.rpc)?.(e.data);pending.delete(e.data.rpc);}};child.start();child.postMessage({type:'ready'});}},get srcdoc(){return frameHTML;},set srcdoc(value){frameHTML=value;if(value)queueMicrotask(()=>this.onload?.());}};
  const record={id:'synthetic-tab',frame,abort:new AbortController()};let lastScope,lastAction;
- const host=createOpaqueHost({record,validate:validateRemote,emit:e=>events.push(e),siteAction:async d=>{lastScope=d.scope;lastAction=d;return {allowed:false};},transport:async d=>{
+ const websiteSession=createWebsiteSession();const host=createOpaqueHost({record,session:websiteSession,validate:validateRemote,emit:e=>events.push(e),siteAction:async d=>{lastScope=d.scope;lastAction=d;return {allowed:false};},transport:async d=>{
   calls.push(d);if(d.url.includes('/cross-redirect'))return {status:302,headers:{location:'https://example.net/cors'},body:new ArrayBuffer(0)};if(d.url.includes('/redirect'))return {status:302,headers:{location:'http://127.0.0.1/private'},body:new ArrayBuffer(0)};
   if(d.url.includes('/delayed')){markDelayed();await new Promise(resolve=>releaseDelayed=resolve);}
   if(d.url.endsWith('/attachment'))return {status:200,headers:{'content-type':'application/octet-stream','content-disposition':'attachment; filename="sample.txt"'},body:new TextEncoder().encode('synthetic attachment').buffer};
@@ -49,6 +49,8 @@ test('trusted broker: redirects, CORS, cookies, scope binding and cleanup',async
    assert.equal(next.url,'https://example.com/?q=Browzen+query');assert.ok(events.some(e=>e.type==='tab-update'&&e.url===next.url));
   });
   await t.test('attachment navigation goes to the confirmation handler instead of rendering bytes',async()=>{await host.command({type:'navigate',url:'https://example.com/attachment'});assert.equal(lastAction.action,'download');assert.equal(lastAction.filename,'sample.txt');assert.equal(new TextDecoder().decode(lastAction.body),'synthetic attachment');assert.equal(lastScope.origin,'https://example.com');});
+  await t.test('normal domain cookies survive subdomain navigation without exposing host-only cookies',async()=>{documentReady=new Promise(resolve=>resolveDocument=resolve);await host.command({type:'navigate',url:'https://example.com/page'});await documentReady;await rpc('cookie-store',{op:'set',value:'domain-test=shared; Domain=example.com; Secure; Path=/'});documentReady=new Promise(resolve=>resolveDocument=resolve);await host.command({type:'navigate',url:'https://sub.example.com/'});const next=await documentReady;assert.match(next.cookies,/domain-test=shared/);assert.doesNotMatch(next.cookies,/secret=server|visible=yes/);assert.equal(createWebsiteSession().cookies.getCookieStringSync('https://example.com/'),'');});
+  await t.test('local storage is session-shared by origin while session storage stays tab-local',async()=>{child.postMessage({type:'store',kind:'local',values:{synthetic:'local'}});child.postMessage({type:'store',kind:'session',values:{synthetic:'tab'}});await rpc('fetch',{url:'https://sub.example.com/barrier'});assert.deepEqual(websiteSession.local.get('https://sub.example.com'),{synthetic:'local'});assert.equal(websiteSession.local.has('https://example.com'),false);assert.equal(JSON.stringify([...websiteSession.local]),'[["https://sub.example.com",{"synthetic":"local"}]]');assert.equal(createWebsiteSession().local.size,0);});
   await host.command({type:'clear'});assert.ok(events.some(e=>e.type==='cleanup-result'&&e.clean));
  }finally{host.destroy();child?.close();globalThis.document=oldDocument;globalThis.fetch=oldFetch;}
 });

@@ -3,7 +3,7 @@ import {compileJS} from './compile-client.js?v=20261113-9';
 import {rewriteCSS,neutralizeCSS} from './css-rewrite.js?v=20261113-6';
 import {sourcePolicy,scriptKinds,verifyIntegrity} from './resource-policy.js?v=20261113-6';
 import {hasRel,rocketLoaderToken,restoreScriptType} from './html-policy.js?v=20261113-8';
-import {splitDocument} from './document-parser.js';
+import {splitDocument} from './document-parser.js?v=20261114-1';
 import {unsafeHeaders,checkCORS,checkPreflight} from './cors-policy.js?v=20261113-9';
 import {dispositionName,validateDownload} from '../download-policy.js';
 import {decodeDataScript} from './data-script.js';
@@ -41,6 +41,7 @@ export function createOpaqueHost({record,transport,siteAction,emit,validate}){
   const credentials=options.credentials!=='omit'&&(options.credentials==='include'||new URL(url).origin===new URL(pageURL||url).origin);
   if(credentials){const cookie=jar().getCookieStringSync(url);if(cookie)headers.Cookie=cookie;}
   const response=await transmit({url,method,headers,body:options.body,signal,priority:options.priority||0});
+  if(response.status>=400)console.warn('Browzen HTTP '+response.status+' ('+method+') from '+new URL(url).origin);
   if(stopped||epoch!==generation)throw Error('Website document changed.');bytes+=response.body?.byteLength||0;if(bytes>MAX_BYTES)throw Error('This page exceeded the 96 MB session transfer limit.');
   metric('request-count',requestCount);metric('received-bytes',bytes);
   const h=Object.fromEntries(Object.entries(response.headers||{}).map(([k,v])=>[k.toLowerCase(),v]));
@@ -73,7 +74,7 @@ export function createOpaqueHost({record,transport,siteAction,emit,validate}){
   }catch(e){if(epoch===generation)inFlight.delete(key);fail(e);throw e;}
  }
  async function html(source,base){
-  const parsed=splitDocument(source),headTemplate=document.createElement('template'),template=document.createElement('template');headTemplate.innerHTML=parsed.head;template.innerHTML=parsed.body;
+  const parsed=splitDocument(source,{scriptsEnabled:!noScript}),headTemplate=document.createElement('template'),template=document.createElement('template');headTemplate.innerHTML=parsed.head;template.innerHTML=parsed.body;
   const roots=[headTemplate.content,template.content],root={querySelector:s=>roots.map(r=>r.querySelector(s)).find(Boolean),querySelectorAll:s=>roots.flatMap(r=>[...r.querySelectorAll(s)])};const scripts=[];let effective=base;
   const documentAttrs={};for(const tag of ['html','body'])documentAttrs[tag]=parsed.documentAttrs[tag].filter(([key])=>['class','id','lang','dir','style'].includes(key)||key.startsWith('data-')&&!key.startsWith('data-bzn-'));
   const loaderTokens=new Set();for(const el of root.querySelectorAll('script[src][data-cf-settings]')){const token=rocketLoaderToken(el.getAttribute('src'),el.getAttribute('data-cf-settings'),base);if(token){loaderTokens.add(token);el.remove();}}

@@ -1,7 +1,7 @@
 import {addressToURL,validateRemote} from './url-policy.js';
 import {createSiteControls,permissionNames} from './site-controls.js?v=20261113-9';
 import {webOrigin} from './config.js';
-import {createOpaqueHost} from './single/host.js?v=20261113-9';
+import {createOpaqueHost} from './single/host.js?v=20261114-1';
 import {retryableTransport} from './retry-policy.js?v=20261113-7';
 const $=s=>document.querySelector(s);
 const WEB_BROWSING_SUSPENDED=false;

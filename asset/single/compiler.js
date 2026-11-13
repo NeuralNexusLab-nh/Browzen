@@ -1,0 +1,35 @@
+// Syntax-aware URL globals. Native sandbox/CSP, not this rewriter, provide isolation.
+import {parse} from './vendor.js';
+export function rewriteJS(source,base,module=false){
+ const ast=parse(source,{ecmaVersion:'latest',sourceType:module?'module':'script',allowAwaitOutsideFunction:true,allowReturnOutsideFunction:!module,allowHashBang:true});
+ const scopes=new WeakMap(),bound=new WeakSet(),edits=[],imports=[];
+ const virtual=new Set(['window','self','globalThis','location','parent','top','frames','opener']);
+ function bind(p,s){if(!p)return;if(p.type==='Identifier'){s.names.add(p.name);bound.add(p);}else if(p.type==='RestElement')bind(p.argument,s);else if(p.type==='AssignmentPattern')bind(p.left,s);else if(p.type==='ArrayPattern')p.elements.forEach(v=>bind(v,s));else if(p.type==='ObjectPattern')p.properties.forEach(v=>bind(v.type==='RestElement'?v.argument:v.value,s));}
+ function children(n,fn){for(const [k,v]of Object.entries(n)){if(k==='start'||k==='end')continue;if(Array.isArray(v))v.forEach(x=>{if(x?.type)fn(x,k);});else if(v?.type)fn(v,k);}}
+ function collect(n,s){
+  if(n.type==='FunctionDeclaration'||n.type==='ClassDeclaration')bind(n.id,s);
+  const func=/Function/.test(n.type)||n.type==='ArrowFunctionExpression';
+  if(n.type==='Program'||n.type==='BlockStatement'||n.type==='CatchClause'||func){s={parent:s,names:new Set(),func:func||n.type==='Program'};scopes.set(n,s);}
+  if(func){bind(n.id,s);n.params.forEach(p=>bind(p,s));}if(n.type==='CatchClause')bind(n.param,s);
+  if(n.type==='VariableDeclaration'){let t=s;if(n.kind==='var')while(t.parent&&!t.func)t=t.parent;n.declarations.forEach(d=>bind(d.id,t));}
+  if(n.type==='ImportDeclaration')n.specifiers.forEach(p=>bind(p.local,s));children(n,c=>collect(c,s));
+ }
+ collect(ast,{names:new Set(),parent:null,func:true});
+ function local(name,s){for(;s;s=s.parent)if(s.names.has(name))return true;return false;}
+ function visit(n,s,p,key){s=scopes.get(n)||s;
+  if(n.type==='ImportDeclaration'||n.type==='ExportNamedDeclaration'||n.type==='ExportAllDeclaration')if(n.source){const alias='bzn:'+new URL(n.source.value,base).href;imports.push({alias,url:new URL(n.source.value,base).href});edits.push([n.source.start,n.source.end,JSON.stringify(alias)]);}
+  if(n.type==='ImportExpression'){edits.push([n.start,n.source.start,'__bzn.importModule('],[n.source.end,n.end,','+JSON.stringify(base)+')']);}
+  if(n.type==='MetaProperty'&&n.meta.name==='import')edits.push([n.start,n.end,'({url:'+JSON.stringify(base)+'})']);
+  if(n.type==='Identifier'&&virtual.has(n.name)&&!bound.has(n)&&!local(n.name,s)){
+   const property=(p?.type==='MemberExpression'||p?.type==='OptionalMemberExpression')&&key==='property'&&!p.computed;
+   const keyOnly=['Property','MethodDefinition','PropertyDefinition'].includes(p?.type)&&key==='key'&&!p.computed;
+   const label=/^(LabeledStatement|BreakStatement|ContinueStatement)$/.test(p?.type||'');
+   if(!property&&!label&&(!keyOnly||p.shorthand)){const v='__bzn.'+n.name;edits.push([n.start,n.end,p?.shorthand&&key==='value'?n.name+':'+v:v]);}
+  }
+  children(n,(c,k)=>{if(p?.shorthand&&key==='key')return;visit(c,s,n,k);});
+ }
+ visit(ast,null,null,'');
+ const unique=new Map();for(const e of edits)unique.set(e[0]+':'+e[1],e);
+ for(const [start,end,value]of [...unique.values()].sort((a,b)=>b[0]-a[0]))source=source.slice(0,start)+value+source.slice(end);
+ return {source,imports};
+}

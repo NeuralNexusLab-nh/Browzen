@@ -1,7 +1,7 @@
 import {addressToURL,validateRemote} from './url-policy.js';
 import {createSiteControls,permissionNames} from './site-controls.js';
-import {contentOrigin,runtimePath,webOrigin} from './config.js';
-import {secureUUID} from './session-id.js';
+import {webOrigin} from './config.js';
+import {createOpaqueHost} from './single/host.js';
 const $=s=>document.querySelector(s);
 const WEB_BROWSING_SUSPENDED=false;
 const WEB_SAFETY_NOTICE='Website browsing is paused: a WebRTC IP leak was reported. Protection has not been verified. Do not use this preview for anonymous browsing.';
@@ -12,15 +12,15 @@ const engines=[['DuckDuckGo','duckduckgo.ico','https://duckduckgo.com/?q='],['Go
 let searchEngine=0,securityLevel='standard',lastCleanup='No identity refresh yet.',siteControls;
 function status(value){$('#status').textContent=value;}
 function selected(){return tabs.find(t=>t.id===active);}
-function command(type,data={}){if(type==='zoom'){for(const record of records.values())record.port?.postMessage({type,...data});return;}records.get(data.id||active)?.port?.postMessage({type,...data});}
+function deliver(record,data){if(record?.host)Promise.resolve(record.host.command(data)).catch(error=>engineEvent(record,{type:'engine-error',error:error.message}));}
+function command(type,data={}){if(type==='zoom'){for(const record of records.values())deliver(record,{type,...data});return;}deliver(records.get(data.id||active),{type,...data});}
 async function ensureEngine(t){
  if(records.has(t.id))return records.get(t.id).ready;
- if(!globalThis.isSecureContext||!navigator.serviceWorker)throw Error('Browzen requires HTTPS and Service Worker support. Open '+webOrigin+'.');
- const id=secureUUID().replaceAll('-','').slice(0,16),origin=contentOrigin(id);
- const frame=document.createElement('iframe');frame.className='content-engine';frame.title='Isolated website content';frame.sandbox='allow-scripts allow-same-origin allow-forms';frame.setAttribute('allow',"camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'");frame.hidden=t.id!==active;
- const record={id:t.id,origin,frame,abort:new AbortController(),permissions:{camera:false,microphone:false,geolocation:false}};
- record.ready=new Promise((resolve,reject)=>{record.resolve=resolve;record.timer=setTimeout(()=>reject(Error('Content engine did not start. Reload and try again.')),20000);});
- records.set(t.id,record);frame.src=origin+runtimePath+'index.html';$('#viewport').append(frame);layoutFrame(record);if(t.id===active)frame.id='engine';return record.ready;
+ if(!globalThis.isSecureContext)throw Error('Browzen requires HTTPS. Open '+webOrigin+'.');
+  const frame=document.createElement('iframe');frame.className='content-engine';frame.title='Isolated website content';frame.sandbox='allow-scripts allow-forms';frame.setAttribute('allow',"camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'");frame.hidden=t.id!==active;
+  const record={id:t.id,origin:'null',opaque:true,frame,abort:new AbortController(),permissions:{camera:false,microphone:false,geolocation:false}};
+  record.host=createOpaqueHost({record,transport:puterFetch,siteAction:d=>siteControls.handle(record,d),emit:d=>engineEvent(record,d),validate:value=>new URLSearchParams(location.search).has('test')&&/^https:\/\/browzen\.test\//.test(value)?new URL(value):validateRemote(value)});
+  records.set(t.id,record);$('#viewport').append(frame);layoutFrame(record);if(t.id===active)frame.id='engine';record.ready=Promise.resolve(record);return record;
 }
 function drawTabs(){
  const root=$('#tabs');root.replaceChildren();
@@ -43,7 +43,7 @@ async function authenticate(){
 }
 async function navigate(value,t=selected(),{form}={}){
  try {
- const url=new URLSearchParams(location.search).has('test')&&/^https:\/\/browzen\.test\/(probe|actions|child)\.html(?:[?#].*)?$/.test(value)?value:addressToURL(value,engines[searchEngine][2]);if(url.startsWith('browzen://')){t.url=url;t.title=url.includes('settings')?'Settings':url.includes('about')?'About Browzen':'New Tab';t.error=null;activate(t.id);return;}
+ const url=new URLSearchParams(location.search).has('test')&&/^https:\/\/browzen\.test\/(probe|actions|child|single)\.html(?:[?#].*)?$/.test(value)?value:addressToURL(value,engines[searchEngine][2]);if(url.startsWith('browzen://')){t.url=url;t.title=url.includes('settings')?'Settings':url.includes('about')?'About Browzen':'New Tab';t.error=null;activate(t.id);return;}
  if(WEB_BROWSING_SUSPENDED&&!(new URLSearchParams(location.search).has('test')&&url.startsWith('https://browzen.test/')))throw Error(WEB_SAFETY_NOTICE);
  await authenticate();t.url=url;t.title=new URL(url).hostname;t.error=null;t.loading=true;if(t.id===active){activate(t.id);status('Preparing this tab…');}else drawTabs();
  await ensureEngine(t);if(t.id===active)activate(t.id);
@@ -52,7 +52,7 @@ async function navigate(value,t=selected(),{form}={}){
 }
 function showError(message){$('#newtab').hidden=true;if($('#engine'))$('#engine').hidden=true;$('#internal').hidden=true;$('#error-page').hidden=false;$('#error-message').textContent=message;$('#loading').hidden=true;status(message);}
 async function puterFetch(data,record){
- if(new URLSearchParams(location.search).has('test')&&/^https:\/\/browzen\.test\/((probe|actions|child)\.html|worker\.js|shared\.js)(?:[?#].*)?$/.test(data.url)){
+ if(new URLSearchParams(location.search).has('test')&&/^https:\/\/browzen\.test\/((probe|actions|child|single)\.html|worker\.js|shared\.js)(?:[?#].*)?$/.test(data.url)){
   const r=await fetch('/asset/test-fixtures/'+new URL(data.url).pathname.slice(1));let body=await r.arrayBuffer();if(new URL(data.url).pathname==='/child.html'){const echo=JSON.stringify({method:data.method||'GET',query:new URL(data.url).search,body:data.body?new TextDecoder().decode(data.body):''}).replaceAll('&','&amp;').replaceAll('<','&lt;');body=new TextEncoder().encode(new TextDecoder().decode(body)+'<pre id="form-received">'+echo+'</pre>').buffer;}return {status:r.status,statusText:r.statusText,headers:{'content-type':r.headers.get('content-type')},body};
  }
  if(WEB_BROWSING_SUSPENDED)throw Error(WEB_SAFETY_NOTICE);
@@ -65,7 +65,7 @@ async function puterFetch(data,record){
  requests++;
  const method=data.method||'GET';let res;
  for(let attempt=0;;attempt++){
-  try{res=await puter.net.fetch(remote.href,{method,headers,body:data.body??undefined,redirect:'manual',credentials:'omit',signal:record?AbortSignal.any([record.abort.signal,AbortSignal.timeout(60000)]):AbortSignal.timeout(60000)});break;}
+  try{res=await puter.net.fetch(remote.href,{method,headers,body:data.body??undefined,redirect:'manual',credentials:'omit',signal:AbortSignal.any([...(record?[record.abort.signal]:[]),...(data.signal?[data.signal]:[]),AbortSignal.timeout(60000)])});break;}
   catch(error){if(attempt>=2||!['GET','HEAD'].includes(method.toUpperCase())||record?.abort.signal.aborted||!/channel closed|connection reset|network error/i.test(error.message||''))throw error;}
  }
  const raw={};for(const [k,v] of res.headers)raw[k]=v;
@@ -79,23 +79,14 @@ async function puterFetch(data,record){
  }
  return {status:res.status,statusText:res.statusText,headers:raw,body};
 }
-function transportMessage(e,record){const d=e.data;if(!d||!e.ports[0])return;const port=e.ports[0];
- if(d.type==='site-action'){siteControls.handle(record,d).then(result=>port.postMessage({ok:true,result})).catch(error=>port.postMessage({ok:false,error:error.message,name:error.name})).finally(()=>port.close());return;}
- if(d.type!=='request')return;
- puterFetch(d,record).then(result=>{if(!record.retired)port.postMessage({ok:true,result},[result.body]);}).catch(error=>{if(!record.retired){port.postMessage({ok:false,error:error.message||String(error)});status('Could not load a website resource: '+(error.message||error));}}).finally(()=>port.close());}
-window.addEventListener('message',e=>{
- const record=[...records.values()].find(r=>r.origin===e.origin&&r.frame.contentWindow===e.source);if(!record||e.data?.type!=='engine-ready'||record.port)return;
- const pair=new MessageChannel();record.port=pair.port1;record.port.onmessage=e=>{if(record.retired){e.ports[0]?.postMessage({ok:false,error:'Website session closed.'});return;}transportMessage(e,record);};record.port.start();record.frame.contentWindow.postMessage({type:'connect-browzen'},record.origin,[pair.port2]);clearTimeout(record.timer);record.resolve(record);
-});
-window.addEventListener('message',e=>{
- const record=[...records.values()].find(r=>r.origin===e.origin&&r.frame.contentWindow===e.source);if(!record)return;
- const d=e.data;if(d?.type==='cleanup-result'){record.cleanupResolve?.(!!d.clean);return;}if(d?.type==='engine-error'){showError(d.error);return;}
+function engineEvent(record,d){
+ if(d?.type==='cleanup-result'){record.cleanupResolve?.(!!d.clean);return;}if(d?.type==='engine-error'){const t=tabs.find(t=>t.id===record.id);if(t){t.error=d.error;t.loading=false;if(t.id===active)showError(d.error);drawTabs();}return;}
  if(d?.id!==record.id)return;
  if(d.type==='site-document'){siteControls.document(record,d);return;}
  if(d.type==='site-action-error'){status(d.error);return;}
  const t=tabs.find(t=>t.id===d?.id);if(!t)return;
  if(d.type==='tab-update'){if(d.url)t.url=d.url;if(d.title)t.title=d.title;t.loading=!!d.loading;if(t.id===active){$('#address').value=t.url;$('#destination').textContent=t.url;$('#loading').hidden=!t.loading;status(t.loading?'Loading '+t.url:'');}drawTabs();}
-});
+}
 async function checkIP(){const b=$('#check-ip');b.disabled=true;$('#egress').textContent='Checking…';
  if(WEB_BROWSING_SUSPENDED){$('#egress').textContent='Browsing paused';$('#egress-time').textContent='A connection IP does not establish WebRTC protection.';return;}
  try{await authenticate();const r=await puter.net.fetch('https://ifconfig.me/ip');if(!r.ok)throw Error('IP check returned HTTP '+r.status);const value=(await r.text()).trim();if(!/^[0-9a-fA-F:.]{3,64}$/.test(value))throw Error('IP service did not return a plain IP address.');egress=value;$('#egress').textContent=value;$('#egress-time').textContent='Observed '+new Date().toLocaleTimeString()+'. Other requests may use another exit.';}
@@ -121,7 +112,7 @@ for(const [kind,name]of Object.entries(permissionNames)){if(kind==='popups')cont
 const identityButton=document.createElement('button');identityButton.textContent='Refresh Identity';identityButton.onclick=()=>refreshIdentity();$('#browser-menu').append(identityButton);
 $('#panel').addEventListener('toggle',e=>$('#control').setAttribute('aria-expanded',String(e.newState==='open')));
 identityButton.addEventListener('click',()=>$('#browser-menu').hidePopover());
-async function retire(record){if(!record)return true;if(record.cleanup)return record.cleanup;record.retired=true;siteControls?.cancel(record);record.abort.abort();record.frame.hidden=true;record.cleanup=(async()=>{let timer;const clean=await new Promise(resolve=>{record.cleanupResolve=resolve;record.port?.postMessage({type:'clear'});timer=setTimeout(()=>resolve(false),6500);});clearTimeout(timer);record.port?.close();record.frame.remove();records.delete(record.id);return clean;})();return record.cleanup;}
+async function retire(record){if(!record)return true;if(record.cleanup)return record.cleanup;record.retired=true;siteControls?.cancel(record);record.abort.abort();record.frame.hidden=true;if(record.host){record.host.destroy();record.frame.remove();records.delete(record.id);return true;}record.cleanup=(async()=>{let timer;const clean=await new Promise(resolve=>{record.cleanupResolve=resolve;record.port?.postMessage({type:'clear'});timer=setTimeout(()=>resolve(false),6500);});clearTimeout(timer);record.port?.close();record.frame.remove();records.delete(record.id);return clean;})();return record.cleanup;}
 async function refreshTab(){const t=selected();if(t.url.startsWith('browzen://')){activate(t.id);return;}const clean=await retire(records.get(t.id));if(!clean)lastCleanup='A retired website storage deletion is pending. Its old origin is not reused.';await navigate(t.url,t);}
 async function refreshIdentity(){status('Clearing website sessions…');const outcomes=await Promise.all([...records.values()].map(retire));tabs.splice(0);noScript=false;$('#noscript').checked=false;newTab();lastCleanup=outcomes.every(Boolean)?'Website storage cleared. Puter remains signed in.':'Old website origins were retired. Some storage deletion is pending.';status(outcomes.every(Boolean)?'':lastCleanup);checkIP();$('#address').focus();}
 async function renderInternal(url){
@@ -130,7 +121,7 @@ async function renderInternal(url){
  if(url.includes('settings')){
   const html=await(await fetch('/asset/settings.html')).text();if(selected().url!==url)return;const doc=new DOMParser().parseFromString(html,'text/html');box.append(document.importNode(doc.querySelector('.settings-layout'),true));box.classList.add('product-settings');
   box.querySelectorAll('img').forEach(img=>img.src='/asset/logo.svg');
-  const securityNotes=['Website scripts enabled. Separate website origins and permission controls stay active.','Scripts are blocked on unencrypted HTTP websites.','All website scripts blocked. Some websites will not work.'];
+  const securityNotes=['Website scripts enabled. Native opaque-origin sandbox and permission controls stay active.','Scripts are blocked on unencrypted HTTP websites.','All website scripts blocked. Some websites will not work.'];
   box.querySelectorAll('.security-choice').forEach((b,i)=>{b.querySelector('span:not(.level-symbol)').textContent=securityNotes[i];b.classList.toggle('active',b.dataset.value===securityLevel);b.onclick=()=>{securityLevel=b.dataset.value;for(const t of tabs)if(!t.url.startsWith('browzen://'))command('security',{id:t.id,level:securityLevel});renderInternal(url);};});
   box.querySelector('#security .subtle-badge').textContent='Applies immediately';
   const conn=box.querySelector('#connection');conn.querySelector('h2').textContent='Puter & connection';conn.querySelector('.section-heading p').textContent='Your website connection, in one place.';conn.querySelector('#tor-state').textContent='Puter';
@@ -143,10 +134,11 @@ async function renderInternal(url){
  }else{
   box.classList.remove('product-settings');box.innerHTML='<div class="about-hero"><img src="/asset/logo.svg" alt="Browzen"><div><h1>Browzen</h1><p>Beyond the surface. In control.</p></div></div><section class="card"><h2>Your browser. Your own space.</h2><p>Browzen brings a familiar browsing experience to the web: a clean workspace, independent tabs, clear site controls and a connection you can inspect.</p></section><section class="card"><h2>Why we built Browzen</h2><p>We wanted browsing to feel simple without hiding the controls that matter. Browzen keeps your pages, search engines, permissions and connection information together in one consistent interface.</p><h2>What makes Browzen different?</h2><p>Start from the Browzen home, browse in separate website environments and keep control over active content. Local search-engine icons, a unified address bar, NoScript and temporary site permissions make the experience familiar wherever you open it.</p></section><section class="card"><h2>A connection powered by Puter</h2><p>Sign in through Puter to deliver website requests using its networking service. Control Panel shows the IP observed for a connection check. Browzen does not ask for or store your Puter password.</p><h2>Privacy in your hands</h2><p>Website tabs use separate browser origins. Camera, microphone and location requests start blocked and can be enabled individually. Refresh Identity closes website sessions and requests deletion of their browsing data without signing you out of Puter.</p><p>No browser makes you unidentifiable. Your outer browser, account logins, websites and information you share remain relevant. More details and current compatibility limits are documented with the project.</p></section><section class="card"><h2>Responsible use</h2><p>Use Browzen in compliance with applicable laws and third-party rights. You are responsible for your activity. Provided as is, without warranties. To the maximum extent permitted by law, NXLabTW and contributors are not liable for loss, damage or claims arising from its use.</p></section><section class="card"><h2>Made by NXLabTW</h2><p>Browzen is independently developed by NXLabTW. Its web connectivity uses Puter and its content layer uses third-party components with their own licenses.</p><div class="controls"><a href="https://nxlabtw.com" target="_blank" rel="noopener noreferrer">NXLabTW</a><a href="https://github.com/NeuralNexusLab-nh/Browzen" target="_blank" rel="noopener noreferrer">GitHub</a></div></section>';
  }
+ if(!url.includes('settings')){const heading=[...box.querySelectorAll('h2')].find(h=>h.textContent==='Privacy in your hands');if(heading)heading.nextElementSibling.textContent='Website pages run in native opaque-origin sandboxes, without access to the Browzen interface or Puter account storage. Website cookies and temporary storage are kept in memory. Camera, microphone, nested frames and website Workers are unavailable in this static version. Clipboard and notifications use explicit Browzen approval. Refresh Identity retires website sessions without signing out of Puter.';}
  box.querySelectorAll('a[href^="browzen://"]').forEach(a=>a.onclick=e=>{e.preventDefault();navigate(a.getAttribute('href'));});
  box.querySelectorAll('a[href^="https://"]').forEach(a=>a.onclick=e=>{e.preventDefault();navigate(a.getAttribute('href'));});
 }
-// Standard viewport buckets reduce size variation without inventing screen/CPU values.
+// Viewport buckets reduce layout variation, not native screen/DPI fingerprinting.
 new ResizeObserver(()=>{for(const record of records.values())layoutFrame(record);}).observe($('#viewport'));
 function layoutFrame(record){const area=$('#viewport').getBoundingClientRect();record.frame.style.width=Math.max(200,Math.floor(area.width/200)*200)+'px';record.frame.style.height=Math.max(100,Math.floor(area.height/100)*100)+'px';record.frame.style.left='50%';record.frame.style.top='50%';record.frame.style.transform='translate(-50%,-50%)';}
 siteControls=createSiteControls({records,active:()=>active,newTab,activate,closeTab,navigate,command,status,validateRemote,testMode:new URLSearchParams(location.search).has('test')});

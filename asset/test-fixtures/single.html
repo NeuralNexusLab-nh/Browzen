@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><title>Browzen single-domain checks</title>
+<style>body{background:#101827;color:#e8edff;font:16px system-ui;padding:28px}pre{white-space:pre-wrap;background:#1b2940;padding:18px;border-radius:12px}button{padding:12px;background:#a9a1ff;border:0;border-radius:8px}</style>
+<h1>Single-domain isolation checks</h1><p>Local synthetic test. No real device, clipboard or STUN data is used.</p>
+<pre id="facts">Pending</pre><pre id="storage">Memory storage: pending</pre><pre id="csp">Native CSP: waiting</pre><pre id="cors">CORS: pending</pre>
+<button id="storage-button">Write temporary storage</button><button id="permission">Request clipboard read</button>
+<script>
+const report={};function check(name,fn){try{report[name]=fn();}catch(e){report[name]=e.name;}}
+const nativeWindow=Function('return this')();
+check('parentDOM',()=>nativeWindow.parent.document.title);
+check('parentStorage',()=>nativeWindow.parent.localStorage.length);
+check('nativeOrigin',()=>nativeWindow.origin);
+check('WebRTC',()=>new RTCPeerConnection({iceServers:[]}));
+check('Worker',()=>new Worker('https://browzen.test/worker.js'));
+check('timezone',()=>Intl.DateTimeFormat().resolvedOptions().timeZone);
+check('cpu',()=>navigator.hardwareConcurrency);
+check('Canvas',()=>document.createElement('canvas').toDataURL());
+check('fontAPI',()=>document.fonts.check('14px Arial'));
+check('nestedRealm',()=>{const f=document.createElement('iframe');document.body.append(f);return f.contentWindow?'UNEXPECTED REALM':'blocked';});
+check('parserRealm',()=>{const doc=new DOMParser().parseFromString('<iframe></iframe>','text/html');return doc.querySelector('iframe')?'UNEXPECTED FRAME':'blocked';});
+document.querySelector('#facts').textContent=JSON.stringify(report,null,2);
+document.querySelector('#storage').textContent='Memory storage: '+(localStorage.getItem('synthetic')||'empty');
+document.querySelector('#storage-button').onclick=()=>{localStorage.setItem('synthetic','temporary');document.cookie='synthetic=yes; Secure; Path=/';document.querySelector('#storage').textContent='Memory storage: '+localStorage.getItem('synthetic')+'; cookie: '+document.cookie;};
+document.querySelector('#permission').onclick=async()=>{try{await navigator.clipboard.readText();}catch(e){document.querySelector('#storage').textContent='Clipboard: '+e.name;}};
+document.addEventListener('securitypolicyviolation',e=>{if(e.blockedURI.includes('browzen-probe.invalid'))document.querySelector('#csp').textContent='Native CSP blocked '+e.violatedDirective+'. This is not a DNS packet-capture audit.';});
+// Bypass the URL adapter on purpose with a native stylesheet rule.
+const sheet=new CSSStyleSheet();sheet.replaceSync('.native-network-probe{width:10px;height:10px;background-image:url("https://browzen-probe.invalid/no-data")}');document.adoptedStyleSheets=[...document.adoptedStyleSheets,sheet];const block=document.createElement('div');block.className='native-network-probe';document.body.append(block);
+fetch('https://browzen-probe.invalid/blocked').then(()=>document.querySelector('#cors').textContent='Unexpected success').catch(e=>document.querySelector('#cors').textContent='Private/reserved target blocked: '+e.message);
+</script>

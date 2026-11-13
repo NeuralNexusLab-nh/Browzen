@@ -1,6 +1,7 @@
 import {addressToURL,validateRemote} from './url-policy.js';
 import {createSiteControls,permissionNames} from './site-controls.js';
-import {contentOrigin,runtimePath} from './config.js';
+import {contentOrigin,runtimePath,webOrigin} from './config.js';
+import {secureUUID} from './session-id.js';
 const $=s=>document.querySelector(s);
 const WEB_BROWSING_SUSPENDED=false;
 const WEB_SAFETY_NOTICE='Website browsing is paused: a WebRTC IP leak was reported. Protection has not been verified. Do not use this preview for anonymous browsing.';
@@ -14,7 +15,8 @@ function selected(){return tabs.find(t=>t.id===active);}
 function command(type,data={}){if(type==='zoom'){for(const record of records.values())record.port?.postMessage({type,...data});return;}records.get(data.id||active)?.port?.postMessage({type,...data});}
 async function ensureEngine(t){
  if(records.has(t.id))return records.get(t.id).ready;
- const id=crypto.randomUUID().replaceAll('-','').slice(0,16),origin=contentOrigin(id);
+ if(!globalThis.isSecureContext||!navigator.serviceWorker)throw Error('Browzen requires HTTPS and Service Worker support. Open '+webOrigin+'.');
+ const id=secureUUID().replaceAll('-','').slice(0,16),origin=contentOrigin(id);
  const frame=document.createElement('iframe');frame.className='content-engine';frame.title='Isolated website content';frame.sandbox='allow-scripts allow-same-origin allow-forms';frame.setAttribute('allow',"camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'");frame.hidden=t.id!==active;
  const record={id:t.id,origin,frame,abort:new AbortController(),permissions:{camera:false,microphone:false,geolocation:false}};
  record.ready=new Promise((resolve,reject)=>{record.resolve=resolve;record.timer=setTimeout(()=>reject(Error('Content engine did not start. Reload and try again.')),20000);});
@@ -35,6 +37,7 @@ function activate(id){active=id;const t=selected();$('#address').value=t.url;$('
  siteControls?.sync();
  $('#noscript').checked=!!t.noScript;$('#loading').hidden=!t.loading;drawTabs();}
 async function authenticate(){
+ if(!globalThis.isSecureContext)throw Error('HTTPS is required before signing in or browsing. Open '+webOrigin+'.');
  if(!window.puter?.net?.fetch)throw Error('Puter SDK has not loaded. Check your connection and reload.');
  if(!puter.auth.isSignedIn()){showGate();throw Error('Login with Puter to continue.');}
 }
@@ -110,7 +113,7 @@ document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='l'){e.preventDefa
 function showGate(message='Use your Puter account to continue.') {authenticated=false;$('#auth-gate').hidden=false;$('#chrome').inert=true;$('#viewport').inert=true;$('#sign-in-status').textContent=message;}
 function unlock(){authenticated=true;$('#auth-gate').hidden=true;$('#chrome').inert=false;$('#viewport').inert=false;status('');$('#address').focus();checkIP();}
 $('#sign-in').onclick=async()=>{const b=$('#sign-in');b.disabled=true;try{await puter.auth.signIn({attempt_temp_user_creation:false});unlock();}catch(error){showGate(error.message||error.msg||'Sign-in was not completed. Try again.');}finally{b.disabled=false;}};
-const setupStarted=Date.now();function checkAuth(){if(window.puter?.auth){puter.auth.isSignedIn()?unlock():showGate();$('#sign-in').disabled=false;}else if(Date.now()-setupStarted<20000)setTimeout(checkAuth,200);else showGate('Puter could not load. Check your connection and reload.');}
+const setupStarted=Date.now();function checkAuth(){if(!globalThis.isSecureContext){showGate('HTTPS is required to protect your sign-in and start isolated tabs.');const b=$('#sign-in');b.textContent='Open secure Browzen';b.disabled=false;b.onclick=()=>location.assign(webOrigin);return;}if(window.puter?.auth){puter.auth.isSignedIn()?unlock():showGate();$('#sign-in').disabled=false;}else if(Date.now()-setupStarted<20000)setTimeout(checkAuth,200);else showGate('Puter could not load. Check your connection and reload.');}
 const connectionSection=$('#panel .panel-grid section');connectionSection.querySelector('.badge')?.remove();
 const requestNumber=connectionSection.querySelector('#request-count');requestNumber?.previousElementSibling?.remove();requestNumber?.remove();
 const permissionSection=$('#panel .panel-grid section+section');permissionSection.querySelectorAll('.permission').forEach(row=>row.remove());

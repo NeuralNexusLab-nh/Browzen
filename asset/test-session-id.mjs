@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {webcrypto} from 'node:crypto';import {secureUUID} from './session-id.js';
+test('native randomUUID keeps its crypto receiver',()=>{const source={randomUUID(){assert.equal(this,source);return 'native-id';}};assert.equal(secureUUID(source),'native-id');});
+test('missing randomUUID uses getRandomValues and UUID version/variant bits',()=>{let calls=0;const source={getRandomValues(b){assert.equal(this,source);calls++;b.fill(255);return b;}};assert.equal(secureUUID(source),'ffffffff-ffff-4fff-bfff-ffffffffffff');assert.equal(calls,1);});
+test('fallback identifiers use cryptographic randomness',()=>{const source={getRandomValues:b=>webcrypto.getRandomValues(b)};const ids=Array.from({length:100},()=>secureUUID(source));assert.equal(new Set(ids).size,100);for(const id of ids)assert.match(id,/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);});
+test('no insecure pseudo-random fallback is available',()=>{assert.throws(()=>secureUUID({}),/Secure random generation is unavailable/);});

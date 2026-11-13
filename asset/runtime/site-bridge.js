@@ -1,4 +1,5 @@
 // Site actions stay inside Browzen; native popups are never enabled.
+import {secureUUID} from '../session-id.js';
 export function attachSiteBridge(frame,{controller,notify,request,delegate}){
  const scopes=new Map(),windows=new WeakMap(),popups=new Map();
  const query=Document.prototype.querySelectorAll,windowOf=Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'contentWindow').get;
@@ -24,7 +25,7 @@ export function attachSiteBridge(frame,{controller,notify,request,delegate}){
  function messageArgs(g,message,targetOrigin='/',transfer=[]){if(targetOrigin&&typeof targetOrigin==='object'){transfer=targetOrigin.transfer||[];targetOrigin=targetOrigin.targetOrigin??'/';}targetOrigin=String(targetOrigin);if(targetOrigin!=='*'&&targetOrigin!=='/'){try{targetOrigin=new URL(targetOrigin).origin;}catch{throw new g.DOMException('Invalid target origin.','SyntaxError');}}if(transfer?.length)throw new g.DOMException('Transferable cross-tab messages are not supported.','NotSupportedError');return {message:structuredClone(message),targetOrigin};}
  function wire(client){
   const g=client.global;if(!g.document||!contains(g))return;const prior=windows.get(g);if(prior?.document===g.document)return;
-  const s={id:crypto.randomUUID(),window:g,document:g.document,origin:urlOf(g).origin,decisions:{},statuses:new Map(),streams:new Set(),dead:false,activation:g.navigator.userActivation,openBudget:0,gestureUntil:0};
+  const s={id:secureUUID(),window:g,document:g.document,origin:urlOf(g).origin,decisions:{},statuses:new Map(),streams:new Set(),dead:false,activation:g.navigator.userActivation,openBudget:0,gestureUntil:0};
   if(prior)prior.dead=true;windows.set(g,s);scopes.set(s.id,s);
   const set=(o,k,v)=>{if(o)Object.defineProperty(o,k,{value:v,writable:false,configurable:true});};
   notify('site-document',{id:frame.id,scopeId:s.id,origin:s.origin,isMain:g===frame.frame.contentWindow});
@@ -35,7 +36,7 @@ export function attachSiteBridge(frame,{controller,notify,request,delegate}){
    let url=raw?new URL(String(raw),urlOf(g)).href:'about:blank';
    if(url!=='about:blank'&&!/^https?:/.test(url))throw new g.DOMException('Only HTTP and HTTPS popup links are supported.','SecurityError');
    if(['_self','_parent','_top','_unfencedTop'].includes(target)){client.url=url;return g;}
-   const token=crypto.randomUUID(),item={closed:false};popups.set(token,item);lastOpen={url,time:performance.now()};
+   const token=secureUUID(),item={closed:false};popups.set(token,item);lastOpen={url,time:performance.now()};
    const send=(kind,extra={})=>action(s,{action:kind,token,...extra}).catch(e=>{item.closed=true;notify('site-action-error',{id:frame.id,error:e.message});});
    const gesture=s.openBudget>0&&performance.now()<=s.gestureUntil&&!!s.activation?.isActive;if(gesture)s.openBudget--;
    const opened=send('popup-open',{url,target:String(target||'_blank'),background,form,gesture,noOpener:/\b(noopener|noreferrer)\b/i.test(features)});
@@ -96,7 +97,7 @@ export function attachSiteBridge(frame,{controller,notify,request,delegate}){
    const list=s.statuses.get(name)||[];list.push(p);s.statuses.set(name,list);return p;
   });}
   if(g.Notification){
-   function SiteNotification(title,options={}){if(!new.target)throw new TypeError('Use new Notification().');if(s.decisions.notifications!=='granted')throw new g.DOMException('Notification permission has not been granted.','NotAllowedError');const target=new g.EventTarget(),token=crypto.randomUUID();target.close=()=>action(s,{action:'notification-close',token}).catch(()=>{});action(s,{action:'notification-show',token,title:String(title),body:String(options.body||'')}).catch(()=>target.dispatchEvent(new g.Event('error')));return target;}
+   function SiteNotification(title,options={}){if(!new.target)throw new TypeError('Use new Notification().');if(s.decisions.notifications!=='granted')throw new g.DOMException('Notification permission has not been granted.','NotAllowedError');const target=new g.EventTarget(),token=secureUUID();target.close=()=>action(s,{action:'notification-close',token}).catch(()=>{});action(s,{action:'notification-show',token,title:String(title),body:String(options.body||'')}).catch(()=>target.dispatchEvent(new g.Event('error')));return target;}
    Object.defineProperty(SiteNotification,'permission',{get:()=>({granted:'granted',denied:'denied'}[s.decisions.notifications]||'default')});
    SiteNotification.requestPermission=callback=>ask(s,['notifications']).then(()=> 'granted',()=> 'denied').then(v=>{callback?.(v);return v;});set(g,'Notification',SiteNotification);
   }
@@ -105,15 +106,15 @@ export function attachSiteBridge(frame,{controller,notify,request,delegate}){
  // With NoScript, the page cannot install a client. Handle plain target links
  // from the trusted outer runtime without enabling website JavaScript.
  function noScriptLinks(){
-  const g=frame.frame.contentWindow,doc=g.document,id=crypto.randomUUID(),origin=urlOf(g).origin;
+  const g=frame.frame.contentWindow,doc=g.document,id=secureUUID(),origin=urlOf(g).origin;
   notify('site-document',{id:frame.id,scopeId:id,origin,isMain:true});
   doc.addEventListener('click',e=>{const a=e.target?.closest?.('a[href]');if(!e.isTrusted||!a||e.defaultPrevented)return;
    const target=a.getAttribute('target')||'_self';if(target==='_self'&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey)return;
    let url=a.href;try{if(url.startsWith(g.location.origin+'/asset/runtime/p/'))url=controller.decodeUrl(url);url=new URL(url,urlOf(g)).href;}catch{return;}
    if(!/^https?:/.test(url))return;e.preventDefault();
-   request({type:'site-action',tabId:frame.id,scope:{id,origin,topOrigin:origin,isMain:true},action:'popup-open',url,target,token:crypto.randomUUID(),noOpener:true,gesture:true,background:!!(e.ctrlKey||e.metaKey)}).catch(error=>notify('site-action-error',{id:frame.id,error:error.message}));
+   request({type:'site-action',tabId:frame.id,scope:{id,origin,topOrigin:origin,isMain:true},action:'popup-open',url,target,token:secureUUID(),noOpener:true,gesture:true,background:!!(e.ctrlKey||e.metaKey)}).catch(error=>notify('site-action-error',{id:frame.id,error:error.message}));
   });
-  doc.addEventListener('submit',e=>{if(!e.isTrusted||e.defaultPrevented)return;const d=formNavigation(g,e.target,e.submitter);if(!d)return;e.preventDefault();request({type:'site-action',tabId:frame.id,scope:{id,origin,topOrigin:origin,isMain:true},action:'popup-open',...d,token:crypto.randomUUID(),noOpener:true,gesture:true}).catch(error=>notify('site-action-error',{id:frame.id,error:error.message}));});
+  doc.addEventListener('submit',e=>{if(!e.isTrusted||e.defaultPrevented)return;const d=formNavigation(g,e.target,e.submitter);if(!d)return;e.preventDefault();request({type:'site-action',tabId:frame.id,scope:{id,origin,topOrigin:origin,isMain:true},action:'popup-open',...d,token:secureUUID(),noOpener:true,gesture:true}).catch(error=>notify('site-action-error',{id:frame.id,error:error.message}));});
  }
  return {noScriptLinks,receiveMessage(data){const s=scopes.get(data.scopeId);if(!s||!alive(s))return;const source=data.source.kind==='opener'?s.openerHandle:popups.get(data.source.token)?.handle;if(!source)return;const event=new s.window.MessageEvent('message',{data:data.data,origin:data.origin});Object.defineProperty(event,'source',{value:source});s.window.dispatchEvent(event);},popupClosed(token){const p=popups.get(token);if(p)p.closed=true;},revoke(names){for(const s of scopes.values()){for(const n of names)state(s,n,'denied');for(const stream of s.streams)stream.getTracks().forEach(t=>t.stop());}},dispose(){for(const s of scopes.values()){s.dead=true;for(const stream of s.streams)stream.getTracks().forEach(t=>t.stop());}scopes.clear();}};
 }

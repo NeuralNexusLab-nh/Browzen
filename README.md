@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.svg" width="128" alt="Browzen logo">
+  <img src="asset/logo.svg" width="128" alt="Browzen logo">
 </p>
 
 # Browzen
@@ -14,8 +14,16 @@
 </p>
 
 <p align="center">
+  <a href="https://browzen.nxlabtw.com/">
+    <img src="asset/open-web-button.svg" width="600" alt="Open Browzen Web">
+  </a>
+</p>
+
+<p align="center"><strong>Browzen Web · Requires Puter · No Tor</strong><br><sub>The web version of Browzen. Best-effort protections, not guaranteed anonymity. <a href="asset/LOCAL.md">Web limitations</a></sub></p>
+
+<p align="center">
   <a href="https://drive.proton.me/urls/C4CPKQBZDR#bhvHs86uvOHu">
-    <img src="download-button.svg" width="560" alt="Download Browzen for Windows">
+    <img src="asset/download-button.svg" width="560" alt="Download Browzen for Windows">
   </a>
 </p>
 
@@ -23,7 +31,7 @@
 
 <p align="center">
   <a href="https://drive.proton.me/urls/5S7CX0CRAC#9KbgPA2Mmb9J">
-    <img src="download-linux-button.svg" width="560" alt="Download Browzen for Linux x86_64">
+    <img src="asset/download-linux-button.svg" width="560" alt="Download Browzen for Linux x86_64">
   </a>
 </p>
 
@@ -95,3 +103,5 @@ The Windows and Linux executables are provided through the download buttons abov
 ## License
 
 Licensed under the Apache License 2.0.
+
+Web runtime dependencies retain their own licenses; see [third-party notices](asset/runtime/NOTICE.md).

@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Browzen local security checks</title><style>body{font:15px system-ui;padding:24px;background:#111827;color:#e5ecff}pre{white-space:pre-wrap;padding:16px;background:#202b42}h1{font-size:25px}</style>
+<h1>Browzen local security checks</h1><p>Synthetic local fixture. No STUN server or external leak-test service is contacted.</p>
+<pre id="main">Main: pending</pre><pre id="frame">Iframe: pending</pre><pre id="worker">Worker: pending</pre><pre id="shared">SharedWorker: pending</pre><pre id="network">Direct network: pending</pre><pre id="font">Font access: pending</pre>
+<script>
+function facts(){let rtc='not blocked';try{const p=new RTCPeerConnection({iceServers:[]});p.close();}catch(e){rtc=e.name;}
+ let canvas='readable';try{const c=typeof document==='object'?document.createElement('canvas'):new OffscreenCanvas(1,1);c.getContext('2d').getImageData(0,0,1,1);}catch(e){canvas=e.name;}
+ return {rtc,cpu:navigator.hardwareConcurrency,memory:navigator.deviceMemory,language:navigator.language,tz:Intl.DateTimeFormat().resolvedOptions().timeZone,offset:new Date().getTimezoneOffset(),dateConstructorOffset:new Date.prototype.constructor().getTimezoneOffset(),intlConstructorZone:new Intl.DateTimeFormat.prototype.constructor().resolvedOptions().timeZone,canvas};}
+document.querySelector('#main').textContent='Main: '+JSON.stringify(facts());
+try{document.fonts.check('12px Arial');document.querySelector('#font').textContent='Font check not blocked';}catch(e){document.querySelector('#font').textContent='Font check: '+e.name+'; CSS font measurement is NOT guaranteed blocked.';}
+const f=document.createElement('iframe');document.body.append(f);
+try{document.querySelector('#frame').textContent='Iframe: '+JSON.stringify({rtc:(()=>{try{new f.contentWindow.RTCPeerConnection({iceServers:[]}).close();return 'not blocked'}catch(e){return e.name+': '+e.message}})(),cpu:f.contentWindow.navigator.hardwareConcurrency,tz:new f.contentWindow.Intl.DateTimeFormat().resolvedOptions().timeZone});}catch(e){document.querySelector('#frame').textContent='Iframe error: '+e.message;}
+const source='const facts='+facts.toString()+';postMessage(facts());';
+try{const w=new Worker('https://browzen.test/worker.js');w.onmessage=e=>{document.querySelector('#worker').textContent='Worker: '+JSON.stringify(e.data);w.terminate();};w.onerror=e=>document.querySelector('#worker').textContent='Worker error: '+e.message;}catch(e){document.querySelector('#worker').textContent='Worker blocked: '+e.message;}
+try{const s=new SharedWorker('https://browzen.test/shared.js');s.port.onmessage=e=>{document.querySelector('#shared').textContent='SharedWorker: '+JSON.stringify(e.data);s.port.close();};s.onerror=e=>document.querySelector('#shared').textContent='SharedWorker error: '+e.message;}catch(e){document.querySelector('#shared').textContent='SharedWorker blocked: '+e.message;}
+// bypass the fetch adapter deliberately via a native Request URL; CSP must reject this.
+let violations=0;document.addEventListener('securitypolicyviolation',e=>{if(e.blockedURI.includes('browzen-probe.invalid')){violations++;document.querySelector('#network').textContent='Direct network blocked by CSP ('+violations+' events). Not a DNS wire capture.';}});
+try{const client=window[Symbol.for('scramjet client global')];client.natives.call('fetch',client.global,'https://browzen-probe.invalid/no-data').then(()=>document.querySelector('#network').textContent='Unexpected native request success').catch(()=>{if(!violations)document.querySelector('#network').textContent='Native fetch rejected; waiting for CSP evidence.';});}catch(e){document.querySelector('#network').textContent='Native fetch probe unavailable: '+e.message;}
+</script></html>

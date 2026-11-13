@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Browzen</title><link rel="icon" href="/asset/icon.png"><link rel="stylesheet" href="/asset/browser.css"><link rel="stylesheet" href="/asset/refinements.css"><script src="https://js.puter.com/v2/" defer></script><script type="module" src="/asset/browser.js"></script></head>
+<body>
+<header id="chrome">
+ <div id="tabstrip"><img class="app-icon" src="/asset/icon.png" alt="Browzen"><div id="tabs" role="tablist" aria-label="Tabs"></div><button id="new-tab" title="New tab" aria-label="New tab">+</button><div class="spacer"></div></div>
+ <div id="toolbar"><button id="back" title="Back" aria-label="Back">←</button><button id="forward" title="Forward" aria-label="Forward">→</button><button id="reload" title="Reload" aria-label="Reload">↻</button><button id="home" title="Home" aria-label="Home">⌂</button>
+ <form id="address-form"><details class="engines"><summary aria-label="Choose address search engine"><img class="engine-mark" src="/asset/assets/search/duckduckgo.ico" alt="DuckDuckGo"><span class="chevron">⌄</span></summary><div class="engine-menu"></div></details><input id="address" aria-label="Address" placeholder="Search or enter an address" autocomplete="off" spellcheck="false"></form>
+ <button id="control" class="control" aria-expanded="false">◈ Control Panel</button><button id="menu" aria-label="Browser menu" title="Menu">⋯</button></div>
+ <div id="loading" hidden><i></i></div>
+</header>
+<main id="viewport">
+ <section id="newtab"><div class="portal"><img class="logo" src="/asset/logo.svg" alt="Browzen"><h1>Browzen</h1><p>Beyond the surface. In control.</p><form id="search-form"><details class="engines"><summary aria-label="Choose home search engine"><span class="engine-mark">D</span><span>⌄</span></summary><div class="engine-menu"></div></details><input id="search" type="search" aria-label="Search" placeholder="Search the web or enter an address"><button type="submit">Search</button></form><footer><button data-page="settings">Settings</button><button data-page="about">About Browzen</button></footer></div></section>
+ <iframe id="engine" title="Isolated Browzen content engine" src="http://127.0.0.1:7352/" sandbox="allow-scripts allow-same-origin allow-forms" allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'" hidden></iframe>
+ <section id="internal" hidden></section>
+ <section id="error-page" hidden><div class="error-card"><h2>Couldn't open this page</h2><p id="error-message"></p><button id="retry">Try again</button><button data-page="home">Open New Tab</button></div></section>
+</main>
+<aside id="panel" popover><header><strong>Control Panel</strong><button id="close-panel" aria-label="Close control panel">×</button></header><div class="panel-grid"><section><h3>Connection</h3><label>Connection IP</label><strong id="egress">Checking…</strong><small id="egress-time"></small><button id="check-ip">Check IP</button><label>Website</label><div id="destination">New Tab</div></section><section><h3>Site controls</h3><label class="switch-row"><span>NoScript<small>Block website JavaScript</small></span><input id="noscript" type="checkbox" role="switch"></label><p class="small">Permission switches allow this tab to ask. Your browser still controls access.</p><div class="permission">Camera <span>Blocked</span></div><div class="permission">Microphone <span>Blocked</span></div><div class="permission">Location <span>Blocked</span></div></section></div></aside>
+<aside id="browser-menu" popover><button data-page="home">New Tab</button><button data-page="settings">Settings</button><button data-page="about">About Browzen</button></aside>
+<div id="status" role="status"></div>
+<section id="auth-gate" aria-label="Sign in to Browzen"><div class="auth-content"><img src="/asset/logo.svg" alt="Browzen"><h1>Browzen</h1><p>Beyond the surface. In control.</p><button id="sign-in">Login with Puter <span>→</span></button><small id="sign-in-status" role="status">Preparing secure sign-in…</small></div></section>
+</body></html>

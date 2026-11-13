@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Browzen interaction checks</title><style>body{font:15px system-ui;background:#101827;color:#e7eeff;padding:24px}button,a,input,select{font:inherit;padding:10px;margin:5px}a{color:#bbaaff}pre{padding:16px;background:#243149;white-space:pre-wrap}section{border:1px solid #52617b;padding:15px;margin:15px 0}</style>
+<h1>Browzen interaction checks</h1><p>Local synthetic fixture. Device/clipboard tests must be denied unless the user chooses to grant them.</p>
+<section><h2>Managed tabs</h2><a href="https://browzen.test/child.html" target="_blank">Open linked page</a><button id="open">Open with JavaScript</button><button id="blank">Open blank then navigate</button><button id="close">Close popup</button><button id="message">Send message to child</button></section>
+<section><h2>Popup forms</h2><form action="https://browzen.test/child.html" target="_blank"><label>GET field <input name="query" value="Browzen GET test"></label><button>Submit GET tab</button></form><form action="https://browzen.test/child.html" method="post" target="_blank"><label>POST field <input name="message" value="Browzen POST test"></label><button name="submitter" value="included">Submit POST tab</button></form></section>
+<section><h2>Website permissions</h2><button id="query">Query camera permission</button><button id="camera">Request camera</button><button id="mic">Request microphone</button><button id="location">Request location</button><button id="notifications">Request notifications</button><button id="read">Request clipboard read</button><button id="write">Request clipboard write</button></section>
+<section><h2>Normal controls</h2><label>Test input <input id="text"></label><select aria-label="Test select"><option value="a">Alpha</option><option value="b">Beta</option></select><button id="echo">Echo input</button><button id="hash">Navigate hash</button><button id="history">Check History API</button></section><pre id="result">Ready</pre>
+<script>
+const result=document.querySelector('#result');let popup;const report=e=>result.textContent=e.name+': '+e.message;
+function defaultLocation(url=globalThis.location){return url.href;}
+result.textContent='Location: '+location.href+'; default parameter: '+defaultLocation();
+document.querySelector('#open').onclick=()=>{popup=window.open('/child.html','browzen-check-child');result.textContent=popup?'Popup handle available':'Popup blocked';};
+document.querySelector('#blank').onclick=()=>{popup=window.open('','browzen-check-blank');if(popup){popup.location.href='https://browzen.test/child.html';result.textContent='Blank popup navigated';}};
+document.querySelector('#close').onclick=()=>{popup?.close();result.textContent='Popup closed: '+popup?.closed;};
+document.querySelector('#message').onclick=()=>{popup.postMessage('Hello child','https://browzen.test');result.textContent='Message sent';};
+window.addEventListener('message',event=>{if(event.origin==='https://browzen.test')result.textContent='Reply: '+event.data+'; source matches: '+(event.source===popup);});
+document.querySelector('#query').onclick=async()=>{try{result.textContent='Camera state: '+(await navigator.permissions.query({name:'camera'})).state;}catch(e){report(e);}};
+document.querySelector('#camera').onclick=async()=>{try{const s=await navigator.mediaDevices.getUserMedia({video:true});s.getTracks().forEach(t=>t.stop());result.textContent='Camera granted';}catch(e){report(e);}};
+document.querySelector('#mic').onclick=async()=>{try{const s=await navigator.mediaDevices.getUserMedia({audio:true});s.getTracks().forEach(t=>t.stop());result.textContent='Microphone granted';}catch(e){report(e);}};
+document.querySelector('#location').onclick=()=>navigator.geolocation.getCurrentPosition(()=>result.textContent='Location granted',e=>result.textContent='Location denied: '+e.code);
+document.querySelector('#notifications').onclick=async()=>result.textContent='Notifications: '+await Notification.requestPermission();
+document.querySelector('#read').onclick=async()=>{try{await navigator.clipboard.readText();result.textContent='Clipboard read completed (contents not displayed)';}catch(e){report(e);}};
+document.querySelector('#write').onclick=async()=>{try{await navigator.clipboard.writeText('Browzen synthetic clipboard test');result.textContent='Clipboard written';}catch(e){report(e);}};
+document.querySelector('#echo').onclick=()=>result.textContent=document.querySelector('#text').value;
+document.querySelector('#hash').onclick=()=>location.hash='interaction-section';
+document.querySelector('#history').onclick=()=>{const before=location.href;const method='replaceState';history[method]({},'',location.href);result.textContent=JSON.stringify({before,after:location.href,default:defaultLocation(),pathname:location.pathname});};
+</script></html>

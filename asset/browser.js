@@ -1,5 +1,5 @@
-import {addressToURL,validateRemote} from './url-policy.mjs';
-import {createSiteControls,permissionNames} from './site-controls.mjs';
+import {addressToURL,validateRemote} from './url-policy.js';
+import {createSiteControls,permissionNames} from './site-controls.js';
 import {contentOrigin,runtimePath} from './config.js';
 const $=s=>document.querySelector(s);
 const WEB_BROWSING_SUSPENDED=false;

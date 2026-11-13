@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {validateRemote,addressToURL}from'./url-policy.mjs';
+import test from 'node:test';import assert from 'node:assert/strict';import {validateRemote,addressToURL}from'./url-policy.js';
 import {readFile} from 'node:fs/promises';
 test('public targets and search work',()=>{assert.equal(addressToURL('example.com'),'https://example.com/');assert.match(addressToURL('hello world'),/q=hello%20world/);assert.equal(addressToURL('browzen://settings'),'browzen://settings');});
 test('private networks and unsafe schemes are rejected',()=>{for(const u of ['http://127.0.0.1','http://2130706433','http://10.2.3.4','http://192.168.0.1','http://[::1]','http://user:password@example.com','https://test.onion','file:///etc/passwd','javascript:alert(1)'])assert.throws(()=>validateRemote(u));});

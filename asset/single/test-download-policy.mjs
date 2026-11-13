@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {downloadName,dispositionName,validateDownload}from'../download-policy.js';
+test('download filenames cannot traverse paths or use Windows device names',()=>{assert.equal(downloadName('../../hello.txt'),'hello.txt');assert.equal(downloadName('C:\\folder\\file.txt'),'file.txt');assert.equal(downloadName('CON.exe'),'download');assert.equal(downloadName('bad<name>.txt'),'bad_name_.txt');});
+test('disposition filename supports UTF-8 without trusting paths',()=>{assert.equal(dispositionName("attachment; filename*=UTF-8''Browzen%20test.txt"),'Browzen test.txt');assert.equal(dispositionName('attachment; filename="../../sample.txt"'),'sample.txt');});
+test('downloads require bounded byte buffers',()=>{assert.equal(validateDownload(new ArrayBuffer(3)).byteLength,3);assert.throws(()=>validateDownload('not bytes'));assert.throws(()=>validateDownload(new ArrayBuffer(32*1024*1024+1)));});

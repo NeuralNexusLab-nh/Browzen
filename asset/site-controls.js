@@ -1,21 +1,23 @@
+import {downloadName,validateDownload} from './download-policy.js';
 export const permissionNames={camera:'Camera',microphone:'Microphone',geolocation:'Location','clipboard-read':'Read clipboard','clipboard-write':'Write clipboard',notifications:'Notifications',popups:'Open new tabs'};
 const nativePolicy=['camera','microphone','geolocation','clipboard-read','clipboard-write'];
 export function createSiteControls({records,active,newTab,activate,closeTab,navigate,command,status,validateRemote,testMode=false}){
  const modal=document.createElement('dialog');modal.className='site-permission-dialog';modal.innerHTML='<div class="permission-symbol">◇</div><p class="permission-eyebrow">SITE PERMISSION</p><h2></h2><strong class="request-origin"></strong><p class="request-detail"></p><div class="permission-actions"><button class="deny">Block</button><button class="allow">Allow for this page</button></div><p class="permission-footnote">Only this page. Nothing is saved after Refresh Identity.</p>';document.body.append(modal);
  const queue=[],popupMap=new Map(),notifications=new Map();let showing=false;
  function policy(record){record.frame.setAttribute('allow',nativePolicy.map(k=>k+' '+(!k.startsWith('clipboard-')&&record.permissions[k]?'*':"'none'")).join('; '));}
- function sync(){const r=records.get(active());for(const [kind]of Object.entries(permissionNames)){const input=document.querySelector('#allow-'+kind);if(input){input.checked=!!r?.permissions[kind];input.disabled=!!r?.opaque&&['camera','microphone','geolocation'].includes(kind);input.title=input.disabled?'Unavailable in the isolated static web version.':'';}}}
+ function sync(){const r=records.get(active());for(const [kind]of Object.entries(permissionNames)){const input=document.querySelector('#allow-'+kind);if(input){input.checked=!!r?.permissions[kind];input.disabled=!r||!!r.opaque&&['camera','microphone','geolocation'].includes(kind);input.title=!r?'Open a website tab first.':input.disabled?'Unavailable in the isolated static web version.':'';}}}
  function error(message,name='NotAllowedError'){return Object.assign(new Error(message),{name});}
  function verify(record,scope){if(record.retired||!records.has(record.id)||record.retiredScopes?.has(scope?.id))throw error('This page has closed.','AbortError');if(!scope||typeof scope.id!=='string'||!/^https?:\/\//.test(scope.origin))throw error('Invalid website permission request.');const origin=new URL(scope.origin).origin;if(origin!==scope.origin)throw error('Invalid website origin.');record.siteScopes??=new Map();const old=record.siteScopes.get(scope.id);if(old&&old.origin!==scope.origin)throw error('Website identity changed.');record.siteScopes.set(scope.id,{...scope});return scope;}
- function prompt(record,scope,{title,detail,once=false,execute=async()=>true}){return new Promise((resolve,reject)=>{
+ function prompt(record,scope,{title,detail,once=false,footnote='Permission applies only to this page.',execute=async()=>true}){return new Promise((resolve,reject)=>{
   if(queue.length>=8){reject(error('Too many pending permission requests.'));return;}
   if(record.id!==active()){reject(error('Select this tab before granting permission.'));return;}
-  queue.push({record,scope,title,detail,once,execute,resolve,reject});next();
+  queue.push({record,scope,title,detail,once,footnote,execute,resolve,reject});next();
  });}
  function finish(allowed){const item=queue.shift();if(!item)return;modal.close();showing=false;allowed===true?item.resolve(true):item.reject(allowed instanceof Error?allowed:error('Permission blocked in Browzen.'));next();}
  function next(){if(showing||!queue.length)return;const item=queue[0];if(item.record.retired){queue.shift().reject(error('Page closed.','AbortError'));next();return;}showing=true;
   modal.querySelector('h2').textContent=item.title;modal.querySelector('.request-origin').textContent=item.scope.origin;
   modal.querySelector('.request-detail').textContent=item.detail+(item.scope.topOrigin!==item.scope.origin?' Embedded in '+item.scope.topOrigin+'.':'');
+  modal.querySelector('.permission-footnote').textContent=item.footnote;
   const allow=modal.querySelector('.allow');allow.textContent=item.once?'Allow once':'Allow for this page';allow.disabled=false;modal.showModal();modal.querySelector('.deny').focus();
  }
  modal.querySelector('.deny').onclick=()=>finish(false);modal.addEventListener('cancel',e=>{e.preventDefault();finish(false);});
@@ -34,6 +36,7 @@ export function createSiteControls({records,active,newTab,activate,closeTab,navi
  function targetURL(raw){if(raw==='about:blank'||!raw)return 'browzen://newtab';if(testMode&&/^https:\/\/browzen\.test\/(probe|actions|child)\.html(?:[?#].*)?$/.test(raw))return raw;return validateRemote(raw).href;}
  function postTo(target,scope,data,source,scopeId=target?.mainScope){if(!target||target.retired||!scopeId)return;const destination=target.siteScopes?.get(scopeId)?.origin;if(!destination)return;let expected=data.targetOrigin;if(expected==='/')expected=scope.origin;if(expected!=='*'){try{expected=new URL(expected).origin;}catch{throw error('Invalid message target origin.','SyntaxError');}if(expected!==destination)return;}command('managed-message',{id:target.id,origin:scope.origin,data:data.message,source,scopeId});}
  async function handle(record,data){const scope=verify(record,data.scope),action=data.action;
+  if(action==='download'){const body=validateDownload(data.body),name=downloadName(data.filename);await prompt(record,scope,{title:'Download this file?',once:true,footnote:'Saved files remain in your Downloads folder after Refresh Identity.',detail:name+' · '+body.byteLength.toLocaleString()+' bytes. Saved files are outside Browzen’s isolation. Open only files you trust.',execute:async()=>{const blob=new Blob([body],{type:'application/octet-stream'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}});return {saved:true};}
   if(action==='permission'){await permit(record,scope,data.names||[]);return {allowed:true};}
   if(action==='native-denied'){const set=grants(record,scope.id),denied=denials(record,scope.id);for(const n of data.names||[]){set.delete(n);denied.add(n);record.permissions[n]=false;}policy(record);sync();return {};}
   if(action==='clipboard'){

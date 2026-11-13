@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {decodeDataScript}from'./data-script.js';
+test('Meta-style UTF-8 base64 and percent-encoded JavaScript data URLs are decoded without evaluation',()=>{assert.equal(decodeDataScript('data:application/x-javascript; charset=utf-8;base64,'+btoa('window.__d=42;')),'window.__d=42;');assert.equal(decodeDataScript('data:text/javascript,window.x%3D1%3B'),'window.x=1;');});
+test('non-script and malformed data are rejected',()=>{assert.throws(()=>decodeDataScript('data:text/html,<script></script>'));assert.throws(()=>decodeDataScript('https://example.com/script.js'));assert.throws(()=>decodeDataScript('data:text/javascript;base64,@@@@'));});

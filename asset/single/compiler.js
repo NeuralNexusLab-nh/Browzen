@@ -3,7 +3,7 @@ import {parse} from './vendor.js';
 export function rewriteJS(source,base,module=false){
  const ast=parse(source,{ecmaVersion:'latest',sourceType:module?'module':'script',allowAwaitOutsideFunction:true,allowReturnOutsideFunction:!module,allowHashBang:true});
  const scopes=new WeakMap(),bound=new WeakSet(),edits=[],imports=[];
- const virtual=new Set(['window','self','globalThis','location','parent','top','frames','opener']);
+ const virtual=new Set(['window','self','globalThis','location','history','fetch','parent','top','frames','opener']);
  function bind(p,s){if(!p)return;if(p.type==='Identifier'){s.names.add(p.name);bound.add(p);}else if(p.type==='RestElement')bind(p.argument,s);else if(p.type==='AssignmentPattern')bind(p.left,s);else if(p.type==='ArrayPattern')p.elements.forEach(v=>bind(v,s));else if(p.type==='ObjectPattern')p.properties.forEach(v=>bind(v.type==='RestElement'?v.argument:v.value,s));}
  function children(n,fn){for(const [k,v]of Object.entries(n)){if(k==='start'||k==='end')continue;if(Array.isArray(v))v.forEach(x=>{if(x?.type)fn(x,k);});else if(v?.type)fn(v,k);}}
  function collect(n,s){

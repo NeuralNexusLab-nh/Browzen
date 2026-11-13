@@ -87,7 +87,7 @@
 
 
 (() => {
-  // asset/single/idb.js
+  // work/Browzen/asset/single/idb.js
   var messages = {
     AbortError: "A request was aborted, for example through a call to IDBTransaction.abort.",
     ConstraintError: "A mutation operation in the transaction failed because a constraint was not satisfied. For example, an object such as an object store or index already exists and a request attempted to create a new one.",
@@ -3319,22 +3319,65 @@
   var FDBFactory_default = FDBFactory;
   var fakeIndexedDB = new FDBFactory_default();
 
-  // asset/single/css-rewrite.js
+  // work/Browzen/asset/single/css-rewrite.js
   function neutralizeCSS(text) {
     return String(text).replace(/@import\s+(?:url\([^)]*\)|["'][^"']*["'])[^;]*;?/gi, "").replace(/url\(\s*(["']?)(.*?)\1\s*\)/gi, (all, q, url) => url.startsWith("data:") || url.startsWith("#") ? all : 'url("data:,")');
   }
 
-  // asset/single/html-policy.js
+  // work/Browzen/asset/single/html-policy.js
   function hasRel(value, token) {
     return String(value || "").toLowerCase().split(/\s+/).includes(token);
   }
 
-  // asset/single/content-entry.js
+  // work/Browzen/asset/single/window-value.js
+  var windowMethods = /* @__PURE__ */ new Set(["addEventListener", "removeEventListener", "dispatchEvent", "postMessage", "getComputedStyle", "requestAnimationFrame", "cancelAnimationFrame", "requestIdleCallback", "cancelIdleCallback", "setTimeout", "clearTimeout", "setInterval", "clearInterval", "atob", "btoa", "matchMedia", "alert", "confirm", "prompt", "scroll", "scrollTo", "scrollBy", "focus", "blur", "getSelection", "createImageBitmap", "queueMicrotask"]);
+  function windowValue(target, key) {
+    const descriptor = Object.getOwnPropertyDescriptor(target, key);
+    if (descriptor && !descriptor.configurable) {
+      if ("value" in descriptor && !descriptor.writable) return descriptor.value;
+      if (!("value" in descriptor) && !descriptor.get) return void 0;
+    }
+    const value = Reflect.get(target, key, target);
+    return typeof value === "function" && (!value.prototype || windowMethods.has(key)) ? value.bind(target) : value;
+  }
+  function windowFacade(nativeWindow, readVirtual, writeVirtual) {
+    const shell = /* @__PURE__ */ Object.create(null);
+    return new Proxy(shell, { get(target, key, receiver) {
+      if (Object.hasOwn(target, key)) return Reflect.get(target, key, receiver);
+      const virtual = readVirtual(key);
+      return virtual.handled ? virtual.value : windowValue(nativeWindow, key);
+    }, set(target, key, value) {
+      if (writeVirtual(key, value)) return true;
+      if (Object.hasOwn(target, key)) return Reflect.set(target, key, value, target);
+      if (Reflect.set(nativeWindow, key, value, nativeWindow)) return true;
+      return Reflect.set(target, key, value, target);
+    }, defineProperty(target, key, descriptor) {
+      const old = Reflect.getOwnPropertyDescriptor(nativeWindow, key);
+      if (!old || old.configurable) Reflect.defineProperty(nativeWindow, key, descriptor);
+      return Reflect.defineProperty(target, key, descriptor);
+    }, has: (target, key) => Reflect.has(target, key) || Reflect.has(nativeWindow, key), ownKeys: (target) => [.../* @__PURE__ */ new Set([...Reflect.ownKeys(nativeWindow), ...Reflect.ownKeys(target)])], getOwnPropertyDescriptor(target, key) {
+      return Reflect.getOwnPropertyDescriptor(target, key) || ((d) => d ? { ...d, configurable: true } : void 0)(Reflect.getOwnPropertyDescriptor(nativeWindow, key));
+    } });
+  }
+
+  // work/Browzen/asset/single/content-entry.js
   (() => {
     const native = { append: Node.prototype.appendChild, insert: Node.prototype.insertBefore, replace: Node.prototype.replaceChild, set: Element.prototype.setAttribute, get: Element.prototype.getAttribute, remove: Element.prototype.removeAttribute, inner: Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML"), add: EventTarget.prototype.addEventListener, dispatch: EventTarget.prototype.dispatchEvent, Blob, create: URL.createObjectURL.bind(URL), revoke: URL.revokeObjectURL.bind(URL), Function };
     window.__browzenPrivacy?.install(window);
     let port, current, sequence = 0, cookie = "", ready = false, documentInstalled = false, readyState = "loading", scriptErrors = 0;
     const pending = /* @__PURE__ */ new Map(), resources = /* @__PURE__ */ new Map(), urls = /* @__PURE__ */ new Map(), internal = /* @__PURE__ */ new WeakSet(), processed = /* @__PURE__ */ new WeakSet(), popups = /* @__PURE__ */ new Map();
+    const downloadBlobs = /* @__PURE__ */ new Map();
+    define(URL, "createObjectURL", (blob) => {
+      if (!(blob instanceof native.Blob)) return native.create(blob);
+      if (blob.size > 32 * 1024 * 1024 || downloadBlobs.size >= 128) throw new DOMException("Blob limit reached.", "QuotaExceededError");
+      const url = native.create(blob);
+      downloadBlobs.set(url, blob);
+      return url;
+    });
+    define(URL, "revokeObjectURL", (url) => {
+      downloadBlobs.delete(String(url));
+      native.revoke(url);
+    });
     const scope = () => ({ id: current.scope, origin: new URL(current.url).origin, topOrigin: new URL(current.url).origin, isMain: true });
     function send(type, data = {}) {
       port.postMessage({ type, ...data });
@@ -3469,21 +3512,27 @@
       }
       send("navigate", { url });
     }
-    const proxy = new Proxy(window, { get(target, key) {
-      if (["window", "self", "globalThis", "parent", "top", "frames"].includes(key)) return proxy;
-      if (key === "location") return locationFacade;
-      if (key === "opener") return current.opener ? openerFacade : null;
-      if (key === "origin") return new URL(current.url).origin;
-      const value = Reflect.get(target, key, target);
-      return typeof value === "function" && !value.prototype ? value.bind(target) : value;
-    }, set(target, key, value) {
+    const proxy = windowFacade(window, (key) => {
+      if (["window", "self", "globalThis", "parent", "top", "frames"].includes(key)) return { handled: true, value: proxy };
+      if (key === "location") return { handled: true, value: locationFacade };
+      if (key === "history") return { handled: true, value: historyFacade };
+      if (key === "opener") return { handled: true, value: current.opener ? openerFacade : null };
+      if (key === "origin") return { handled: true, value: new URL(current.url).origin };
+      return { handled: false };
+    }, (key, value) => {
       if (key === "location") {
         navigate(value);
         return true;
       }
-      return Reflect.set(target, key, value, target);
-    } });
-    const bridge = { window: proxy, self: proxy, globalThis: proxy, parent: proxy, top: proxy, frames: proxy, get opener() {
+      return false;
+    });
+    const bridge = { window: proxy, self: proxy, globalThis: proxy, parent: proxy, top: proxy, frames: proxy, get fetch() {
+      return proxy.fetch;
+    }, set fetch(value) {
+      proxy.fetch = value;
+    }, get history() {
+      return historyFacade;
+    }, get opener() {
       return current.opener ? openerFacade : null;
     }, get location() {
       return locationFacade;
@@ -3549,19 +3598,40 @@
     }, get closed() {
       return false;
     } };
+    const NativeMessageEvent = MessageEvent;
+    define(window, "MessageEvent", new Proxy(NativeMessageEvent, { construct(target, args, newTarget) {
+      const init = args[1], source = init?.source, managed = source === proxy || source === openerFacade || [...popups.values()].some((p) => p.handle === source);
+      const event = Reflect.construct(target, managed ? [args[0], { ...init, source: null }] : args, newTarget);
+      if (managed) Object.defineProperty(event, "source", { value: source });
+      return event;
+    } }));
     define(window, "open", popup);
     define(window, "close", () => action("opener-close-self").catch(() => {
     }));
-    const oldPush = history.pushState.bind(history), oldReplace = history.replaceState.bind(history);
-    for (const [k, fn] of [["pushState", oldPush], ["replaceState", oldReplace]]) define(history, k, function(state, title, url) {
-      if (url != null) {
-        const u = remote(url, current.url);
-        if (new URL(u).origin !== new URL(current.url).origin) throw new DOMException("History must keep the same origin.", "SecurityError");
+    const nativeHistory = history, oldPush = history.pushState.bind(history), oldReplace = history.replaceState.bind(history);
+    const historyFacade = { get state() {
+      return nativeHistory.state;
+    }, get length() {
+      return nativeHistory.length;
+    }, get scrollRestoration() {
+      return nativeHistory.scrollRestoration;
+    }, set scrollRestoration(value) {
+      nativeHistory.scrollRestoration = value;
+    }, back: () => send("traverse", { delta: -1 }), forward: () => send("traverse", { delta: 1 }), go: (delta) => Number(delta) ? send("traverse", { delta: Math.trunc(Number(delta)) }) : navigate(current.url) };
+    for (const [k, fn] of [["pushState", oldPush], ["replaceState", oldReplace]]) {
+      const mediated = function(state, title, url) {
+        let u = current.url;
+        if (url != null) {
+          u = remote(url, current.url);
+          if (new URL(u).origin !== new URL(current.url).origin) throw new DOMException("History must keep the same origin.", "SecurityError");
+        }
+        fn(state, title);
         current.url = u;
-        send("history", { url: u });
-      }
-      fn(state, title);
-    });
+        send("history", { url: u, replace: k === "replaceState" });
+      };
+      define(nativeHistory, k, mediated);
+      historyFacade[k] = mediated;
+    }
     read(document, "URL", () => current?.url || "about:blank");
     read(document, "documentURI", () => current?.url || "about:blank");
     read(document, "baseURI", () => current?.base || "about:blank");
@@ -3575,6 +3645,42 @@
       cookie = cookie.split("; ").filter((p) => p.split("=")[0] !== name).concat(pair).filter(Boolean).join("; ");
       send("cookie", { value: String(value) });
     } });
+    class MemoryCookieStore extends EventTarget {
+      onchange = null;
+      async getAll(options = {}) {
+        const name = typeof options === "string" ? options : options.name;
+        const { cookies } = await rpc("cookie-store", { op: "get" });
+        return name === void 0 ? cookies : cookies.filter((c) => c.name === String(name));
+      }
+      async get(options) {
+        return (await this.getAll(options))[0] || null;
+      }
+      async set(name, value) {
+        const o = typeof name === "object" ? name : { name, value };
+        if (!o || !o.name || /[;=\s\x00-\x1f]/.test(String(o.name)) || /[;\r\n]/.test(String(o.value ?? ""))) throw new TypeError("Invalid cookie name or value.");
+        let text = String(o.name) + "=" + String(o.value ?? "") + "; Path=" + (o.path || "/");
+        if (o.domain) {
+          if (/[;\r\n]/.test(o.domain)) throw new TypeError("Invalid cookie domain.");
+          text += "; Domain=" + o.domain;
+        }
+        if (o.secure !== false) text += "; Secure";
+        if (o.sameSite) {
+          if (!["strict", "lax", "none"].includes(o.sameSite)) throw new TypeError("Invalid SameSite.");
+          text += "; SameSite=" + o.sameSite;
+        }
+        if (o.expires != null) text += "; Expires=" + new Date(o.expires).toUTCString();
+        await rpc("cookie-store", { op: "set", value: text });
+        const event = new Event("change");
+        Object.defineProperties(event, { changed: { value: await this.getAll(o.name) }, deleted: { value: [] } });
+        this.dispatchEvent(event);
+        this.onchange?.(event);
+      }
+      async delete(options) {
+        const o = typeof options === "string" ? { name: options } : options;
+        await this.set({ ...o, value: "", expires: 0 });
+      }
+    }
+    define(window, "cookieStore", new MemoryCookieStore());
     function storage(kind, initial) {
       let values = { ...initial };
       const api = { get length() {
@@ -3621,8 +3727,13 @@
       const data = await bodyBytes(init.body ?? (request && !["GET", "HEAD"].includes(method) ? await request.arrayBuffer() : void 0));
       if (data?.type && !headers.has("content-type")) headers.set("content-type", data.type);
       if (init.signal?.aborted) throw new DOMException("Request aborted.", "AbortError");
-      const r = await rpc("fetch", { url, method, headers: [...headers], body: data?.body, credentials: init.credentials || request?.credentials || "same-origin" });
+      const r = await rpc("fetch", { url, method, headers: [...headers], body: data?.body, credentials: init.credentials || request?.credentials || "same-origin", mode: init.mode || request?.mode || "cors" });
       if (init.signal?.aborted) throw new DOMException("Request aborted.", "AbortError");
+      if (r.opaque) {
+        const opaque = new Response(null);
+        Object.defineProperties(opaque, { type: { value: "opaque" }, status: { value: 0 }, statusText: { value: "" }, ok: { value: false }, url: { value: "" } });
+        return opaque;
+      }
       const response = new Response([101, 204, 205, 304].includes(r.status) ? null : r.body, { status: r.status, statusText: r.statusText, headers: r.headers });
       Object.defineProperty(response, "url", { value: r.url });
       return response;
@@ -3699,6 +3810,7 @@
       fail("This transport is blocked in static Browzen.");
     });
     define(navigator, "sendBeacon", () => false);
+    define(navigator, "storage", { estimate: async () => ({ quota: 1024 * 1024, usage: new native.Blob([JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage })]).size }), persisted: async () => false, persist: async () => false, getDirectory: async () => fail("Persistent filesystem access is unavailable.") });
     read(navigator, "serviceWorker", () => ({ controller: null, getRegistrations: async () => [], getRegistration: async () => void 0, register: async () => fail("Website Service Workers are blocked."), addEventListener() {
     }, removeEventListener() {
     } }));
@@ -3986,7 +4098,7 @@
     };
     const adjacentElement = Element.prototype.insertAdjacentElement;
     define(Element.prototype, "insertAdjacentElement", function(position, node) {
-      if (blockedTags.has(node.localName?.toLowerCase())) return null;
+      if (blockedTags.has(node?.localName?.toLowerCase())) return null;
       sanitize(node);
       return adjacentElement.call(this, position, node);
     });
@@ -4023,14 +4135,14 @@
     });
     const insertRange = Range.prototype.insertNode;
     define(Range.prototype, "insertNode", function(node) {
-      if (blockedTags.has(node.localName?.toLowerCase())) return;
+      if (blockedTags.has(node?.localName?.toLowerCase())) return;
       sanitize(node);
       return insertRange.call(this, node);
     });
     for (const proto of [Element.prototype, Document.prototype, DocumentFragment.prototype, CharacterData.prototype]) for (const key of ["append", "prepend", "replaceChildren", "before", "after", "replaceWith"]) {
       const fn = proto[key];
       if (fn && Object.hasOwn(proto, key)) define(proto, key, function(...nodes) {
-        nodes = nodes.filter((n) => typeof n === "string" || !blockedTags.has(n.localName?.toLowerCase()));
+        nodes = nodes.filter((n) => typeof n === "string" || !blockedTags.has(n?.localName?.toLowerCase()));
         nodes.forEach((n) => {
           if (typeof n !== "string") sanitize(n);
         });
@@ -4084,6 +4196,21 @@
     HTMLFormElement.prototype.submit = function() {
       submit(this);
     };
+    async function startDownload(raw, filename) {
+      let blob = downloadBlobs.get(raw);
+      if (!blob && /^data:/i.test(raw)) {
+        if (raw.length > 44 * 1024 * 1024) throw new TypeError("Download data URL is too large.");
+        const match = /^data:([^,]*),([\s\S]*)$/i.exec(raw);
+        if (!match) throw new TypeError("Invalid download data URL.");
+        const value = /;base64\s*$/i.test(match[1]) ? Uint8Array.from(atob(decodeURIComponent(match[2])), (c) => c.charCodeAt(0)) : new TextEncoder().encode(decodeURIComponent(match[2]));
+        blob = new native.Blob([value]);
+      }
+      if (blob) {
+        if (blob.size > 32 * 1024 * 1024) throw new TypeError("Download exceeds 32 MB.");
+        return rpc("download", { body: await blob.arrayBuffer(), filename });
+      }
+      return rpc("download", { url: remote(raw), filename });
+    }
     native.add.call(window, "submit", (e) => {
       if (e.defaultPrevented) return;
       e.preventDefault();
@@ -4096,6 +4223,10 @@
       const raw = native.get.call(a, "data-bzn-href") || native.get.call(a, "href");
       if (!raw) return;
       e.preventDefault();
+      if (a.hasAttribute("download")) {
+        startDownload(raw, native.get.call(a, "download")).catch((error) => console.warn("Browzen download: " + error.message));
+        return;
+      }
       if (/^javascript:/i.test(raw)) {
         if (!current.noScript) compile(raw.slice(11)).then((code) => (0, eval)(code));
         return;
@@ -4168,6 +4299,9 @@
           attr(el, "style", neutralizeCSS(value));
         } else if (["class", "id", "lang", "dir"].includes(key) || key.startsWith("data-") && !key.startsWith("data-bzn-")) attr(el, key, value);
       }
+      const head = document.createElement("template");
+      native.inner.set.call(head, payload.head || "");
+      native.append.call(document.head, head.content);
       const t = document.createElement("template");
       native.inner.set.call(t, payload.html);
       native.append.call(document.body, t.content);

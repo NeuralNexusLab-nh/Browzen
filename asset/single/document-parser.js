@@ -1,0 +1,3 @@
+import {parseDocument,getInnerHTML} from './html-parser-vendor.js';
+// Pure-data HTML parsing: unlike a live Document, this cannot load subresources.
+export function splitDocument(source){const document=parseDocument(String(source),{decodeEntities:true}),html=document.children.find(n=>n.name==='html')||document;const head=html.children.find(n=>n.name==='head'),body=html.children.find(n=>n.name==='body');const content=body||{children:html.children.filter(n=>n!==head&&n.type!=='directive')};const attrs=node=>Object.entries(node?.attribs||{});return {head:head?getInnerHTML(head):'',body:getInnerHTML(content),documentAttrs:{html:html===document?[]:attrs(html),body:attrs(body)}};}

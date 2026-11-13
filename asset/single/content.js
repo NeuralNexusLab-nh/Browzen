@@ -87,7 +87,7 @@
 
 
 (() => {
-  // work/Browzen/asset/single/idb.js
+  // asset/single/idb.js
   var messages = {
     AbortError: "A request was aborted, for example through a call to IDBTransaction.abort.",
     ConstraintError: "A mutation operation in the transaction failed because a constraint was not satisfied. For example, an object such as an object store or index already exists and a request attempted to create a new one.",
@@ -3319,7 +3319,17 @@
   var FDBFactory_default = FDBFactory;
   var fakeIndexedDB = new FDBFactory_default();
 
-  // work/Browzen/asset/single/content-entry.js
+  // asset/single/css-rewrite.js
+  function neutralizeCSS(text) {
+    return String(text).replace(/@import\s+(?:url\([^)]*\)|["'][^"']*["'])[^;]*;?/gi, "").replace(/url\(\s*(["']?)(.*?)\1\s*\)/gi, (all, q, url) => url.startsWith("data:") || url.startsWith("#") ? all : 'url("data:,")');
+  }
+
+  // asset/single/html-policy.js
+  function hasRel(value, token) {
+    return String(value || "").toLowerCase().split(/\s+/).includes(token);
+  }
+
+  // asset/single/content-entry.js
   (() => {
     const native = { append: Node.prototype.appendChild, insert: Node.prototype.insertBefore, replace: Node.prototype.replaceChild, set: Element.prototype.setAttribute, get: Element.prototype.getAttribute, remove: Element.prototype.removeAttribute, inner: Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML"), add: EventTarget.prototype.addEventListener, dispatch: EventTarget.prototype.dispatchEvent, Blob, create: URL.createObjectURL.bind(URL), revoke: URL.revokeObjectURL.bind(URL), Function };
     window.__browzenPrivacy?.install(window);
@@ -3866,7 +3876,7 @@
         return;
       }
       if (["action", "formaction", "srcdoc", "srcset", "imagesrcset", "ping"].includes(key)) return;
-      const kind = el.tagName === "LINK" && /stylesheet/i.test(native.get.call(el, "rel") || "") ? "style" : "binary";
+      const kind = el.tagName === "LINK" && hasRel(native.get.call(el, "rel"), "stylesheet") ? "style" : "binary";
       if (el.tagName === "LINK" && kind !== "style") return;
       if (/^data:/i.test(String(value))) {
         attr(el, key, value);
@@ -4150,6 +4160,14 @@
       define(window, "sessionStorage", storage("session", payload.session));
       define(window, "indexedDB", new FDBFactory_default());
       define(window, "IDBKeyRange", FDBKeyRange_default);
+      for (const [tag, attrs] of Object.entries(payload.documentAttrs || {})) {
+        const el = tag === "html" ? document.documentElement : tag === "body" ? document.body : null;
+        if (!el) continue;
+        for (const [key, value] of attrs) if (key === "style") {
+          attr(el, "data-bzn-style", value);
+          attr(el, "style", neutralizeCSS(value));
+        } else if (["class", "id", "lang", "dir"].includes(key) || key.startsWith("data-") && !key.startsWith("data-bzn-")) attr(el, key, value);
+      }
       const t = document.createElement("template");
       native.inner.set.call(t, payload.html);
       native.append.call(document.body, t.content);

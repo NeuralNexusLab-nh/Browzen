@@ -1,5 +1,6 @@
 import {IDBFactory,IDBKeyRange} from './idb.js';
 import {neutralizeCSS} from './css-rewrite.js';
+import {hasRel} from './html-policy.js';
 // Runs only in an opaque-origin frame. The parent never evaluates website code.
 (() => {
  const native={append:Node.prototype.appendChild,insert:Node.prototype.insertBefore,replace:Node.prototype.replaceChild,set:Element.prototype.setAttribute,get:Element.prototype.getAttribute,remove:Element.prototype.removeAttribute,inner:Object.getOwnPropertyDescriptor(Element.prototype,'innerHTML'),add:EventTarget.prototype.addEventListener,dispatch:EventTarget.prototype.dispatchEvent,Blob:Blob,create:URL.createObjectURL.bind(URL),revoke:URL.revokeObjectURL.bind(URL),Function:Function};
@@ -119,7 +120,7 @@ import {neutralizeCSS} from './css-rewrite.js';
   }catch(error){scriptFailure(error,src||'inline script');el.dispatchEvent(new Event('error'));}
  }
  function scheduleURL(el,key,value){attr(el,'data-bzn-'+key,value);if(key==='href'&&['A','AREA'].includes(el.tagName)){attr(el,'href','#');return;}if(el.tagName==='SCRIPT'){if(el.isConnected)prepareScript(el);return;}if(['action','formaction','srcdoc','srcset','imagesrcset','ping'].includes(key))return;
-  const kind=el.tagName==='LINK'&&/stylesheet/i.test(native.get.call(el,'rel')||'')?'style':'binary';if(el.tagName==='LINK'&&kind!=='style')return;
+  const kind=el.tagName==='LINK'&&hasRel(native.get.call(el,'rel'),'stylesheet')?'style':'binary';if(el.tagName==='LINK'&&kind!=='style')return;
   if(/^data:/i.test(String(value))){attr(el,key,value);return;}resource(value,kind,native.get.call(el,'data-bzn-integrity')||native.get.call(el,'integrity')||'').then(url=>{attr(el,key,url);}).catch(()=>el.dispatchEvent(new Event('error')));
  }
  Element.prototype.setAttribute=function(key,value){const k=String(key).toLowerCase();if(internal.has(this))return native.set.call(this,key,value);if(urlAttrs.has(k)){scheduleURL(this,k,String(value));return;}if(k.startsWith('on')){attr(this,'data-bzn-'+k,String(value));native.set.call(this,key,'');if(!current?.noScript)compile(String(value)).then(code=>this[k]=native.Function('event',code)).catch(()=>{});return;}return native.set.call(this,key,value);};
@@ -156,6 +157,7 @@ import {neutralizeCSS} from './css-rewrite.js';
   for(const key of ['src','srcset','poster','href','xlink:href']){const value=native.get.call(el,'data-bzn-'+key);if(!value)continue;const task=()=>resource(value).then(url=>attr(el,key,url)).catch(()=>{});if(el.tagName==='IMG'&&el.loading==='lazy'&&'IntersectionObserver'in window){const observer=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)){observer.disconnect();task();}},{rootMargin:'400px'});observer.observe(el);}else jobs.push(task());}
  }return Promise.allSettled(jobs);}
  async function install(payload){documentInstalled=true;current=payload;cookie=payload.cookies||'';addResources(payload.resources);define(window,'localStorage',storage('local',payload.local));define(window,'sessionStorage',storage('session',payload.session));define(window,'indexedDB',new IDBFactory());define(window,'IDBKeyRange',IDBKeyRange);
+  for(const [tag,attrs]of Object.entries(payload.documentAttrs||{})){const el=tag==='html'?document.documentElement:tag==='body'?document.body:null;if(!el)continue;for(const [key,value]of attrs)if(key==='style'){attr(el,'data-bzn-style',value);attr(el,'style',neutralizeCSS(value));}else if(['class','id','lang','dir'].includes(key)||key.startsWith('data-')&&!key.startsWith('data-bzn-'))attr(el,key,value);}
   const t=document.createElement('template');native.inner.set.call(t,payload.html);native.append.call(document.body,t.content);document.documentElement.style.zoom=String(payload.zoom/100);
   let lastTitle=document.title;send('title',{title:lastTitle});new MutationObserver(()=>{if(document.title!==lastTitle){lastTitle=document.title;send('title',{title:lastTitle});}}).observe(document.documentElement,{childList:true,subtree:true,characterData:true});
   const handlers=[];for(const el of document.querySelectorAll('*'))for(const a of [...el.attributes])if(a.name.startsWith('data-bzn-on')&&!current.noScript)handlers.push(compile(a.value).then(code=>{el[a.name.slice(9)]=native.Function('event',code);}).catch(()=>{}));

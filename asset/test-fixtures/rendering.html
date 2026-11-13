@@ -1,6 +1,8 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><title>Progressive rendering checks</title>
+<!doctype html><html lang="en" class="fixture-root"><meta charset="utf-8"><title>Progressive rendering checks</title>
 <style>body{background:#111827;color:#e8eeff;font:16px system-ui;padding:30px}pre{white-space:pre-wrap;background:#22314a;padding:16px}img{width:80px;height:80px}</style>
-<h1>HTML visible before slow resources</h1><pre id="order">Waiting for script checks</pre><pre id="image">Slow image pending</pre>
+<body class="fixture-body"><h1>HTML visible before slow resources</h1><pre id="order">Waiting for script checks</pre><pre id="image">Slow image pending</pre>
+<pre id="loader">Loader script pending</pre><script type="880ba0de6d2c0887cce0d82b-text/javascript">document.querySelector('#loader').textContent='Managed loader script ran; root='+document.documentElement.className+'; body='+document.body.className;</script>
+<script src="/cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="880ba0de6d2c0887cce0d82b-|49" defer></script>
 <form id="delegated"><button>Test delegated submission</button></form><pre id="delegated-result">Delegated form pending</pre>
 <img src="/slow-image.svg" onload="document.querySelector('#image').textContent='Slow image loaded'">
 <script>window.order=['inline-before'];</script>

@@ -2,6 +2,7 @@ import {CookieJar} from './vendor.js';
 import {compileJS} from './compile-client.js?v=20261113-6';
 import {rewriteCSS,neutralizeCSS} from './css-rewrite.js?v=20261113-6';
 import {sourcePolicy,scriptKinds,verifyIntegrity} from './resource-policy.js?v=20261113-6';
+import {hasRel,rocketLoaderToken,restoreScriptType,documentTagAttributes} from './html-policy.js?v=20261113-8';
 import {secureUUID} from '../session-id.js';
 // Trusted-side transport. No target source executes in this realm.
 const MAX_BYTES=96*1024*1024,MAX_RESOURCES=400;
@@ -63,6 +64,9 @@ export function createOpaqueHost({record,transport,siteAction,emit,validate}){
  }
  async function html(source,base){
   const template=document.createElement('template');template.innerHTML=source;const root=template.content;const scripts=[];let effective=base;
+  const documentAttrs={};for(const tag of ['html','body']){const attrs=documentTagAttributes(source,tag);documentAttrs[tag]=[];if(attrs){const t=document.createElement('template');t.innerHTML='<div '+attrs+'></div>';for(const a of t.content.firstElementChild?.attributes||[])if(['class','id','lang','dir','style'].includes(a.name)||a.name.startsWith('data-')&&!a.name.startsWith('data-bzn-'))documentAttrs[tag].push([a.name,a.value]);}}
+  const loaderTokens=new Set();for(const el of root.querySelectorAll('script[src][data-cf-settings]')){const token=rocketLoaderToken(el.getAttribute('src'),el.getAttribute('data-cf-settings'),base);if(token){loaderTokens.add(token);el.remove();}}
+  for(const el of root.querySelectorAll('script[type]'))el.setAttribute('type',restoreScriptType(el.getAttribute('type'),loaderTokens));
   const baseNode=root.querySelector('base[href]');if(baseNode)try{effective=target(baseNode.getAttribute('href'),base);}catch{}
   root.querySelectorAll('base,meta[http-equiv],iframe,frame,frameset,object,embed,portal').forEach(n=>n.remove());
   for(const el of root.querySelectorAll('*')){
@@ -82,7 +86,7 @@ export function createOpaqueHost({record,transport,siteAction,emit,validate}){
    if(el.hasAttribute('style')){el.setAttribute('data-bzn-style',el.getAttribute('style'));el.setAttribute('style',neutralizeCSS(el.getAttribute('style')));}
    if(tag==='style'){el.setAttribute('data-bzn-css',el.textContent);el.textContent=neutralizeCSS(el.textContent);}
    if(tag==='link'){
-    const rel=(el.getAttribute('rel')||'').toLowerCase(),href=el.getAttribute('data-bzn-href');if(!(rel==='stylesheet'&&href))el.remove();
+    const rel=el.getAttribute('rel'),href=el.getAttribute('data-bzn-href');if(!(hasRel(rel,'stylesheet')&&href))el.remove();else el.setAttribute('rel',hasRel(rel,'alternate')?'alternate stylesheet':'stylesheet');
    }
    if(tag==='script'){
     const type=(el.getAttribute('type')||'').toLowerCase(),module=type==='module';if(type&&!module&&!/^(text|application)\/(javascript|ecmascript)$/.test(type))continue;
@@ -91,11 +95,11 @@ export function createOpaqueHost({record,transport,siteAction,emit,validate}){
     const src=el.getAttribute('data-bzn-src');try{if(src){script.url=target(src,effective);script.external=true;}else{script.source=el.textContent;script.raw=true;}}catch(e){script.error=e.message;}
    }
   }
-  return {html:template.innerHTML,scripts,base:effective};
+  return {html:template.innerHTML,scripts,base:effective,documentAttrs};
  }
  function cookieText(){try{return jar().getCookieStringSync(pageURL,{http:false});}catch{return '';}}
  async function connect(payload,token){
-  const code=await(bootstrap??=fetch('/asset/single/content.js?v=20261113-6').then(r=>{if(!r.ok)throw Error('Website sandbox bundle unavailable.');return r.text();}));if(token!==generation||stopped)return;
+  const code=await(bootstrap??=fetch('/asset/single/content.js?v=20261113-8').then(r=>{if(!r.ok)throw Error('Website sandbox bundle unavailable.');return r.text();}));if(token!==generation||stopped)return;
   const pair=new MessageChannel();port?.close();port=pair.port1;const channelPort=port;let unexpected=0;
   const sentResources=new Set((payload.resources||[]).map(r=>r.id));
   function delta(){const list=[...resources.values()].filter(r=>!sentResources.has(r.id));for(const r of list)sentResources.add(r.id);return list;}

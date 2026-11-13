@@ -14,6 +14,8 @@ Classic scripts and CSS may be embedded across origins without CORS, as ordinary
 
 HTML is displayed before optional resources finish. Script conversions run in a trusted parser Worker (target code is never evaluated there); classic blocking/defer/async and module scheduling have separate queues. Resources are deduplicated within a document and sent as deltas. CSS font fallbacks prefer WOFF2 to avoid downloading every font format. These are memory-only optimizations, not a persistent website cache. Timing attributes on website iframes expose document/first-content/DOM-ready/load timings and counts for diagnostics; first-content is a render opportunity after DOM attachment, not a paint-trace benchmark.
 
+Stylesheet relations are parsed as token lists, including `preload stylesheet`, with alternate stylesheets kept alternate. Root/body styling metadata is retained when full HTML is converted into fragments. Recognized Rocket Loader scheduling metadata is normalized so the original scripts run through Browzen's own queues, without executing the scheduling wrapper or unlocking `document.write`. This is not support for bypassing Cloudflare security challenges. Site API calls can still fail CORS, preflight or unsupported browser-feature checks even when CSS and application scripts load.
+
 Nested browsing contexts are disabled to avoid uninstrumented realms. WebRTC, WebTransport, WebSockets, SharedWorkers, website Service Workers and local-device APIs are unavailable. These restrictions break some websites. **This is not an audited operating-system network boundary or a guarantee against all browser/DNS leaks.**
 
 ## State and controls

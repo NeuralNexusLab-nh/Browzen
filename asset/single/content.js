@@ -3305,7 +3305,7 @@
 
   // work/Browzen/asset/single/css-rewrite.js
   function neutralizeCSS(text) {
-    return String(text).replace(/@import\s+(?:url\([^)]*\)|["'][^"']*["'])[^;]*;?/gi, "").replace(/url\(\s*(["']?)(.*?)\1\s*\)/gi, (all, q, url) => url.startsWith("data:") || url.startsWith("#") ? all : 'url("data:,")');
+    return String(text).replace(/@import\s+(?:url\([^)]*\)|["'][^"']*["'])[^;]*;?/gi, "").replace(/url\(\s*(["']?)(.*?)\1\s*\)/gi, (all, q, url) => /^(data|blob):/i.test(url) || url.startsWith("#") ? all : 'url("data:,")');
   }
 
   // work/Browzen/asset/single/html-policy.js
@@ -3352,21 +3352,95 @@
     } });
   }
 
+  // work/Browzen/asset/single/dynamic-css.js
+  function installDynamicCSS(g, convert) {
+    const versions = /* @__PURE__ */ new WeakMap();
+    const ticket = (object, key) => {
+      key = key.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
+      let state = versions.get(object);
+      if (!state) versions.set(object, state = { epoch: 0, keys: /* @__PURE__ */ new Map() });
+      if (["css-text", "sheet", "style-text"].includes(key)) state.epoch++;
+      const epoch = state.epoch, n = (state.keys.get(key) || 0) + 1;
+      state.keys.set(key, n);
+      return () => state.epoch === epoch && state.keys.get(key) === n;
+    };
+    const hasURL = (value) => /url\s*\(|@import\b/i.test(value);
+    function write(object, key, value, apply) {
+      value = String(value);
+      const current = ticket(object, key);
+      if (!hasURL(value)) return apply(value);
+      apply(neutralizeCSS(value));
+      Promise.resolve().then(() => convert(value)).then((css) => {
+        if (current()) apply(css);
+      }).catch(() => {
+      });
+    }
+    const style = g.CSSStyleDeclaration?.prototype;
+    if (style) {
+      for (const key of Object.getOwnPropertyNames(style)) {
+        const d2 = Object.getOwnPropertyDescriptor(style, key);
+        if (d2?.set && d2.configurable) Object.defineProperty(style, key, { ...d2, set(value) {
+          write(this, key, value, (v) => d2.set.call(this, v));
+        } });
+      }
+      const set = style.setProperty;
+      style.setProperty = function(key, value, priority) {
+        write(this, String(key), value, (v) => set.call(this, key, v, priority));
+      };
+      const remove = style.removeProperty;
+      style.removeProperty = function(key) {
+        ticket(this, String(key));
+        return remove.call(this, key);
+      };
+    }
+    const sheet = g.CSSStyleSheet?.prototype;
+    if (sheet) {
+      const insert = sheet.insertRule, remove = sheet.deleteRule, replace = sheet.replaceSync, replaceAsync = sheet.replace;
+      if (insert) sheet.insertRule = function(rule, index = 0) {
+        rule = String(rule);
+        if (!hasURL(rule)) return insert.call(this, rule, index);
+        const result = insert.call(this, neutralizeCSS(rule) || "@media not all {}", index), placeholder = this.cssRules[result];
+        Promise.resolve().then(() => convert(rule)).then((css) => {
+          const at = [...this.cssRules].indexOf(placeholder);
+          if (at < 0) return;
+          remove.call(this, at);
+          insert.call(this, css, at);
+        }).catch(() => {
+        });
+        return result;
+      };
+      if (replace) sheet.replaceSync = function(text) {
+        write(this, "sheet", text, (v) => replace.call(this, v));
+      };
+      if (replaceAsync) sheet.replace = function(text) {
+        const current = ticket(this, "sheet");
+        return Promise.resolve(convert(String(text))).then((css) => current() ? replaceAsync.call(this, css) : this);
+      };
+    }
+    const nodes = g.Node?.prototype, d = nodes && Object.getOwnPropertyDescriptor(nodes, "textContent");
+    if (d?.set && d.configurable) Object.defineProperty(nodes, "textContent", { ...d, set(value) {
+      if (this.nodeType === 1 && this.tagName === "STYLE") write(this, "style-text", value, (v) => d.set.call(this, v));
+      else d.set.call(this, value);
+    } });
+  }
+
   // work/Browzen/asset/single/content-entry.js
   (() => {
     const native = { append: Node.prototype.appendChild, insert: Node.prototype.insertBefore, replace: Node.prototype.replaceChild, set: Element.prototype.setAttribute, get: Element.prototype.getAttribute, remove: Element.prototype.removeAttribute, inner: Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML"), add: EventTarget.prototype.addEventListener, dispatch: EventTarget.prototype.dispatchEvent, Blob, create: URL.createObjectURL.bind(URL), revoke: URL.revokeObjectURL.bind(URL), Function };
     window.__browzenPrivacy?.install(window);
     let port, current, sequence = 0, cookie = "", ready = false, documentInstalled = false, readyState = "loading", scriptErrors = 0;
     const pending = /* @__PURE__ */ new Map(), resources = /* @__PURE__ */ new Map(), urls = /* @__PURE__ */ new Map(), internal = /* @__PURE__ */ new WeakSet(), processed = /* @__PURE__ */ new WeakSet(), popups = /* @__PURE__ */ new Map();
-    const downloadBlobs = /* @__PURE__ */ new Map();
+    const downloadBlobs = /* @__PURE__ */ new Map(), ownedBlobs = /* @__PURE__ */ new Set();
     define(URL, "createObjectURL", (blob) => {
-      if (!(blob instanceof native.Blob)) return native.create(blob);
-      if (blob.size > 32 * 1024 * 1024 || downloadBlobs.size >= 128) throw new DOMException("Blob limit reached.", "QuotaExceededError");
+      if (ownedBlobs.size >= 128) throw new DOMException("Blob limit reached.", "QuotaExceededError");
+      if (blob instanceof native.Blob && blob.size > 32 * 1024 * 1024) throw new DOMException("Blob limit reached.", "QuotaExceededError");
       const url = native.create(blob);
-      downloadBlobs.set(url, blob);
+      ownedBlobs.add(url);
+      if (blob instanceof native.Blob) downloadBlobs.set(url, blob);
       return url;
     });
     define(URL, "revokeObjectURL", (url) => {
+      ownedBlobs.delete(String(url));
       downloadBlobs.delete(String(url));
       native.revoke(url);
     });
@@ -3394,6 +3468,9 @@
       } catch {
       }
     }
+    function compatible(o, k, v) {
+      Object.defineProperty(o, k, { configurable: true, writable: true, value: v });
+    }
     function read(o, k, get) {
       try {
         Object.defineProperty(o, k, { configurable: false, get });
@@ -3402,10 +3479,10 @@
     }
     const blockedTags = /* @__PURE__ */ new Set(["iframe", "frame", "frameset", "object", "embed", "portal"]);
     const createElement = Document.prototype.createElement, createElementNS = Document.prototype.createElementNS;
-    define(Document.prototype, "createElement", function(name, ...args) {
+    compatible(Document.prototype, "createElement", function(name, ...args) {
       return createElement.call(this, blockedTags.has(String(name).toLowerCase()) ? "div" : name, ...args);
     });
-    define(Document.prototype, "createElementNS", function(ns, name, ...args) {
+    compatible(Document.prototype, "createElementNS", function(ns, name, ...args) {
       return createElementNS.call(this, ns, blockedTags.has(String(name).toLowerCase().split(":").pop()) ? "div" : name, ...args);
     });
     function remote(value, base = current.base) {
@@ -3458,7 +3535,7 @@
       native.append.call(document.head, node);
     }
     const resourcePending = /* @__PURE__ */ new Map();
-    async function resourceEntry(url, kind = "binary", integrity = "") {
+    async function resourceEntry(url, kind = "asset", integrity = "") {
       const key = kind + ":" + remote(url) + ":" + integrity;
       if (!resourcePending.has(key)) {
         const promise = rpc("resource", { url: remote(url), base: current.base, kind, integrity }).then((result) => {
@@ -3470,7 +3547,7 @@
       }
       return resourcePending.get(key);
     }
-    async function resource(url, kind = "binary", integrity = "") {
+    async function resource(url, kind = "asset", integrity = "") {
       return materializeAsync(await resourceEntry(url, kind, integrity));
     }
     async function convertCSS(source) {
@@ -3484,6 +3561,7 @@
       }
       return text;
     }
+    installDynamicCSS(window, convertCSS);
     const locationFacade = {};
     for (const key of ["href", "origin", "protocol", "host", "hostname", "port", "pathname", "search", "hash"]) Object.defineProperty(locationFacade, key, { enumerable: true, get: () => new URL(current.url)[key], set: (value) => {
       const u = new URL(current.url);
@@ -3798,9 +3876,10 @@
     }
     Object.assign(XHR, { UNSENT: 0, OPENED: 1, HEADERS_RECEIVED: 2, LOADING: 3, DONE: 4 });
     define(window, "XMLHttpRequest", XHR);
-    for (const key of ["WebSocket", "WebTransport", "EventSource", "Worker", "SharedWorker", "RTCPeerConnection", "webkitRTCPeerConnection"]) define(window, key, function() {
+    for (const key of ["WebSocket", "WebTransport", "EventSource", "RTCPeerConnection", "webkitRTCPeerConnection"]) define(window, key, function() {
       fail("This transport is blocked in static Browzen.");
     });
+    for (const key of ["Worker", "SharedWorker"]) define(window, key, void 0);
     define(navigator, "sendBeacon", () => false);
     define(navigator, "storage", { estimate: async () => ({ quota: 1024 * 1024, usage: new native.Blob([JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage })]).size }), persisted: async () => false, persist: async () => false, getDirectory: async () => fail("Persistent filesystem access is unavailable.") });
     read(navigator, "serviceWorker", () => ({ controller: null, getRegistrations: async () => [], getRegistration: async () => void 0, register: async () => fail("Website Service Workers are blocked."), addEventListener() {
@@ -3880,6 +3959,10 @@
     const urlAttrs = /* @__PURE__ */ new Set(["src", "href", "xlink:href", "poster", "action", "formaction", "srcset", "imagesrcset", "data", "srcdoc", "ping"]);
     function attr(el, key, value) {
       native.set.call(el, key, value);
+    }
+    function assetURL(el, key, value) {
+      attr(el, key, value);
+      if (el.tagName === "SOURCE" && ["VIDEO", "AUDIO"].includes(el.parentElement?.tagName)) el.parentElement.load();
     }
     async function compile(source, module = false) {
       return (await rpc("compile", { source, base: current.base, module })).source;
@@ -3980,19 +4063,23 @@
         return;
       }
       if (["action", "formaction", "srcdoc", "srcset", "imagesrcset", "ping"].includes(key)) return;
-      const kind = el.tagName === "LINK" && hasRel(native.get.call(el, "rel"), "stylesheet") ? "style" : "binary";
+      const kind = el.tagName === "LINK" && hasRel(native.get.call(el, "rel"), "stylesheet") ? "style" : "asset";
       if (el.tagName === "LINK" && kind !== "style") return;
-      if (/^data:/i.test(String(value))) {
-        attr(el, key, value);
+      if (/^data:/i.test(String(value)) || ownedBlobs.has(String(value)) || [...urls.values()].includes(String(value))) {
+        assetURL(el, key, value);
         return;
       }
       resource(value, kind, native.get.call(el, "data-bzn-integrity") || native.get.call(el, "integrity") || "").then((url) => {
-        attr(el, key, url);
+        assetURL(el, key, url);
       }).catch(() => el.dispatchEvent(new Event("error")));
     }
     Element.prototype.setAttribute = function(key, value) {
       const k = String(key).toLowerCase();
       if (internal.has(this)) return native.set.call(this, key, value);
+      if (k === "style" && this.style) {
+        this.style.cssText = String(value);
+        return;
+      }
       if (urlAttrs.has(k)) {
         scheduleURL(this, k, String(value));
         return;
@@ -4033,6 +4120,9 @@
           el.remove();
           continue;
         }
+        if (el.tagName === "STYLE" && neutralizeCSS(el.textContent) !== el.textContent) el.textContent = el.textContent;
+        const rawStyle = native.get.call(el, "style");
+        if (rawStyle && neutralizeCSS(rawStyle) !== rawStyle) el.style.cssText = rawStyle;
         for (const a of [...el.attributes]) if (urlAttrs.has(a.name.toLowerCase())) {
           const k = a.name.toLowerCase(), original = native.get.call(el, "data-bzn-" + k) ?? a.value;
           native.remove.call(el, a.name);
@@ -4062,7 +4152,7 @@
       const t = document.createElement("template");
       native.inner.set.call(t, String(value));
       sanitize(t.content);
-      this.replaceChildren(t.content);
+      (this.tagName === "TEMPLATE" ? this.content : this).replaceChildren(t.content);
     }, get: native.inner.get });
     Element.prototype.insertAdjacentHTML = function(position, html) {
       const t = document.createElement("template");
@@ -4089,7 +4179,7 @@
       }
     };
     const adjacentElement = Element.prototype.insertAdjacentElement;
-    define(Element.prototype, "insertAdjacentElement", function(position, node) {
+    compatible(Element.prototype, "insertAdjacentElement", function(position, node) {
       if (blockedTags.has(node?.localName?.toLowerCase())) return null;
       sanitize(node);
       return adjacentElement.call(this, position, node);
@@ -4109,31 +4199,31 @@
       } });
     }
     for (const proto of [Element.prototype, window.ShadowRoot?.prototype]) if (proto) {
-      for (const name of ["setHTML", "setHTMLUnsafe"]) if (name in proto) define(proto, name, function(value) {
+      for (const name of ["setHTML", "setHTMLUnsafe"]) if (name in proto) compatible(proto, name, function(value) {
         this.innerHTML = value;
       });
     }
     const parseHTML = DOMParser.prototype.parseFromString;
-    define(DOMParser.prototype, "parseFromString", function(...args) {
+    compatible(DOMParser.prototype, "parseFromString", function(...args) {
       const doc = parseHTML.apply(this, args);
       sanitize(doc);
       return doc;
     });
     const fragment = Range.prototype.createContextualFragment;
-    define(Range.prototype, "createContextualFragment", function(value) {
+    compatible(Range.prototype, "createContextualFragment", function(value) {
       const result = fragment.call(this, value);
       sanitize(result);
       return result;
     });
     const insertRange = Range.prototype.insertNode;
-    define(Range.prototype, "insertNode", function(node) {
+    compatible(Range.prototype, "insertNode", function(node) {
       if (blockedTags.has(node?.localName?.toLowerCase())) return;
       sanitize(node);
       return insertRange.call(this, node);
     });
     for (const proto of [Element.prototype, Document.prototype, DocumentFragment.prototype, CharacterData.prototype]) for (const key of ["append", "prepend", "replaceChildren", "before", "after", "replaceWith"]) {
       const fn = proto[key];
-      if (fn && Object.hasOwn(proto, key)) define(proto, key, function(...nodes) {
+      if (fn && Object.hasOwn(proto, key)) compatible(proto, key, function(...nodes) {
         nodes = nodes.filter((n) => typeof n === "string" || !blockedTags.has(n?.localName?.toLowerCase()));
         nodes.forEach((n) => {
           if (typeof n !== "string") sanitize(n);
@@ -4143,28 +4233,28 @@
     }
     for (const name of ["parseHTML", "parseHTMLUnsafe"]) if (Document[name]) {
       const fn = Document[name];
-      define(Document, name, function(...args) {
+      compatible(Document, name, function(...args) {
         const doc = fn.apply(this, args);
         sanitize(doc);
         return doc;
       });
     }
-    define(document, "write", (...text) => {
+    compatible(document, "write", (...text) => {
       const t = document.createElement("template");
       native.inner.set.call(t, text.join(""));
       sanitize(t.content);
       native.append.call(document.body, t.content);
     });
-    define(document, "writeln", (...text) => document.write(...text, "\n"));
-    define(Document.prototype, "open", function() {
+    compatible(document, "writeln", (...text) => document.write(...text, "\n"));
+    compatible(Document.prototype, "open", function() {
       return this;
     });
-    define(Document.prototype, "close", () => {
+    compatible(Document.prototype, "close", () => {
     });
-    define(Document.prototype, "write", function(...text) {
+    compatible(Document.prototype, "write", function(...text) {
       document.write(...text);
     });
-    define(Document.prototype, "writeln", function(...text) {
+    compatible(Document.prototype, "writeln", function(...text) {
       document.writeln(...text);
     });
     function formData(form, submitter) {
@@ -4259,7 +4349,7 @@
         for (const key of ["src", "srcset", "poster", "href", "xlink:href"]) {
           const value = native.get.call(el, "data-bzn-" + key);
           if (!value) continue;
-          const task = () => resource(value).then((url) => attr(el, key, url)).catch(() => {
+          const task = () => resource(value).then((url) => assetURL(el, key, url)).catch(() => {
           });
           if (el.tagName === "IMG" && el.loading === "lazy" && "IntersectionObserver" in window) {
             const observer = new IntersectionObserver((entries) => {

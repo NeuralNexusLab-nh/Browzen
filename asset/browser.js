@@ -1,7 +1,7 @@
 import {addressToURL,validateRemote} from './url-policy.js';
 import {createSiteControls,permissionNames} from './site-controls.js?v=20261113-9';
 import {webOrigin} from './config.js';
-import {createOpaqueHost,createWebsiteSession} from './single/host.js?v=20261114-3';
+import {createOpaqueHost,createWebsiteSession} from './single/host.js?v=20261114-4';
 import {retryableTransport} from './retry-policy.js?v=20261113-7';
 import {abortable} from './transport-guard.js?v=20261114-2';
 const $=s=>document.querySelector(s);

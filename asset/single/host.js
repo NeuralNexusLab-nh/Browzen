@@ -1,13 +1,14 @@
 import {CookieJar} from './vendor.js';
 import {compileJS} from './compile-client.js?v=20261113-9';
-import {rewriteCSS,neutralizeCSS} from './css-rewrite.js?v=20261113-6';
-import {sourcePolicy,scriptKinds,verifyIntegrity} from './resource-policy.js?v=20261113-6';
+import {rewriteCSS,neutralizeCSS} from './css-rewrite.js?v=20261114-4';
+import {sourcePolicy,scriptKinds,verifyIntegrity} from './resource-policy.js?v=20261114-4';
 import {hasRel,rocketLoaderToken,restoreScriptType} from './html-policy.js?v=20261113-8';
 import {splitDocument} from './document-parser.js?v=20261114-1';
 import {unsafeHeaders,checkCORS,checkPreflight} from './cors-policy.js?v=20261113-9';
 import {dispositionName,validateDownload} from '../download-policy.js';
 import {decodeDataScript} from './data-script.js';
 import {secureUUID} from '../session-id.js';
+import {mediaDocument} from './media-document.js';
 // Trusted-side transport. No target source executes in this realm.
 const MAX_BYTES=96*1024*1024,MAX_RESOURCES=400;
 const CSP="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob:; style-src 'unsafe-inline' blob:; img-src data: blob:; font-src data: blob:; media-src data: blob:; connect-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
@@ -53,11 +54,11 @@ export function createOpaqueHost({record,transport,siteAction,emit,validate,sess
   delete h['set-cookie'];delete h['set-cookie2'];return {...response,headers:h,url};
  }
  async function css(text,base,chain=new Set()){
-  return rewriteCSS(text,base,resource,chain);
+  return rewriteCSS(text,base,(url,base,kind,chain)=>resource(url,base,kind==='binary'?'asset':kind,chain),chain);
  }
  const inFlight=new Map();
  async function resource(raw,base,kind='binary',chain=new Set(),integrity=''){
-  if(!['binary','style',...scriptKinds].includes(kind))throw new TypeError('Unsupported resource type.');
+  if(!['binary','asset','style',...scriptKinds].includes(kind))throw new TypeError('Unsupported resource type.');
   if(String(integrity).length>2048)throw new TypeError('Integrity metadata is too large.');
   const epoch=generation;if(/^data:/i.test(raw))return raw;const url=target(raw,base),key=kind+':'+url+':'+integrity;
   if(inFlight.has(key)){const old=inFlight.get(key);if(chain.has(key))return old.id;await old.promise;return old.id;}
@@ -113,7 +114,7 @@ export function createOpaqueHost({record,transport,siteAction,emit,validate,sess
  }
  function cookieText(){try{return jar().getCookieStringSync(pageURL,{http:false});}catch{return '';}}
  async function connect(payload,token){
-  const code=await(bootstrap??=fetch('/asset/single/content.js?v=20261114-3').then(r=>{if(!r.ok)throw Error('Website sandbox bundle unavailable.');return r.text();}));if(token!==generation||stopped)return;
+  const code=await(bootstrap??=fetch('/asset/single/content.js?v=20261114-4').then(r=>{if(!r.ok)throw Error('Website sandbox bundle unavailable.');return r.text();}));if(token!==generation||stopped)return;
   const pair=new MessageChannel();port?.close();port=pair.port1;const channelPort=port;let unexpected=0;
   const sentResources=new Set((payload.resources||[]).map(r=>r.id));
   function delta(){const list=[...resources.values()].filter(r=>!sentResources.has(r.id));for(const r of list)sentResources.add(r.id);return list;}
@@ -160,9 +161,9 @@ export function createOpaqueHost({record,transport,siteAction,emit,validate,sess
   try{
    let form=options.form,body,method='GET',headers={};if(form){method=(form.method||'get').toUpperCase();const params=new URLSearchParams();for(const [k,v]of form.entries||[])params.append(k,typeof v==='string'?v:v.name);if(method==='GET'){const u=new URL(pageURL);u.search=params.toString();pageURL=u.href;}else if(form.enctype==='multipart/form-data'){const data=new FormData();for(const [k,v]of form.entries||[])data.append(k,v);const encoded=new Response(data);body=await encoded.arrayBuffer();headers['Content-Type']=encoded.headers.get('content-type');}else if(form.enctype==='text/plain'){body=new TextEncoder().encode([...params].map(([k,v])=>k+'='+v).join('\r\n')+'\r\n').buffer;headers['Content-Type']='text/plain';}else{body=new TextEncoder().encode(params.toString()).buffer;headers['Content-Type']='application/x-www-form-urlencoded';}}
    update({url:pageURL});
-   const response=await request(pageURL,{method,headers,body,credentials:'include',priority:4});if(token!==generation)return;metric('document-ms',clock()-started);pageURL=response.url;update({url:pageURL});const contentType=String(response.headers['content-type']||'');let documentSource=new TextDecoder().decode(response.body);
+   const response=await request(pageURL,{method,headers,body,credentials:'include',priority:4});if(token!==generation)return;metric('document-ms',clock()-started);pageURL=response.url;update({url:pageURL});const contentType=String(response.headers['content-type']||'');let documentSource;
    if(/^attachment(?:;|$)/i.test(response.headers['content-disposition']||'')){validateDownload(response.body);await siteAction({action:'download',scope:{id:scope,origin:new URL(pageURL).origin,topOrigin:new URL(pageURL).origin,isMain:true},body:response.body,filename:dispositionName(response.headers['content-disposition'],new URL(pageURL).pathname.split('/').pop())});update({loading:false});return;}
-   if(!/text\/html|application\/xhtml\+xml/.test(contentType))documentSource='<pre>'+documentSource.replaceAll('&','&amp;').replaceAll('<','&lt;')+'</pre>';
+   const media=mediaDocument(contentType,pageURL);if(media){sourcePolicy('asset',pageURL,new URL(pageURL).origin,response.headers);const id='r'+(++count);resources.set(id,{id,url:pageURL,type:contentType,body:response.body});inFlight.set('asset:'+pageURL+':',{id,promise:Promise.resolve()});documentSource=media;}else{documentSource=new TextDecoder().decode(response.body);if(!/text\/html|application\/xhtml\+xml/.test(contentType))documentSource='<pre>'+documentSource.replaceAll('&','&amp;').replaceAll('<','&lt;')+'</pre>';}
    const payload=await html(documentSource,pageURL);if(token!==generation)return;
    if(!options.traverse){history=history.slice(0,cursor+1);history.push(pageURL);cursor=history.length-1;}
    await connect({...payload,url:pageURL,id:record.id,scope,noScript,zoom:options.zoom||100,cookies:cookieText(),local:session.local.get(new URL(pageURL).origin)||{},session:sessionStores.get(new URL(pageURL).origin)||{},resources:[...resources.values()],opener:options.opener},token);

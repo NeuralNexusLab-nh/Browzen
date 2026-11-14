@@ -1,10 +1,11 @@
 export const scriptKinds=new Set(['script','script-cors','module']);
 export function sourcePolicy(kind,url,origin,headers){
- if(!['binary','style',...scriptKinds].includes(kind))throw new TypeError('Unsupported resource type.');
+ if(!['binary','asset','style',...scriptKinds].includes(kind))throw new TypeError('Unsupported resource type.');
  const cross=new URL(url).origin!==origin,allow=headers['access-control-allow-origin'];
  const cors=!cross||allow==='*'||allow===origin;
  if(!cors&&(kind==='module'||kind==='script-cors'))throw new TypeError('Cross-origin module or CORS script was not permitted by its server.');
  const mime=String(headers['content-type']||'').split(';')[0].trim().toLowerCase();
+ if(kind==='asset'&&!/^(?:image\/(?:png|jpeg|gif|webp|avif|svg\+xml|x-icon|vnd\.microsoft\.icon|bmp)|video\/[a-z0-9.+-]+|audio\/[a-z0-9.+-]+|font\/[a-z0-9.+-]+|application\/(?:font-woff|vnd\.ms-fontobject|x-font-(?:ttf|otf|woff)))$/.test(mime))throw new TypeError('This resource is not a supported image, font, audio or video asset.');
  if(kind==='style'&&mime!=='text/css')throw new TypeError('Stylesheet response is not CSS.');
  if(scriptKinds.has(kind)&&!(/^(text|application)\/(javascript|ecmascript|x-javascript)$/.test(mime)||/^text\/javascript1\.[0-5]$/.test(mime)))throw new TypeError('Script response has an unsupported MIME type: '+(mime||'missing'));
  return {opaque:!cors,script:scriptKinds.has(kind)};

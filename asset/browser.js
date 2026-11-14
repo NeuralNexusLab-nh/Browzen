@@ -2,8 +2,7 @@ import {addressToURL,validateRemote} from './url-policy.js';
 import {createSiteControls,permissionNames} from './site-controls.js?v=20261113-9';
 import {webOrigin} from './config.js';
 import {createOpaqueHost,createWebsiteSession} from './single/host.js?v=20261114-4';
-import {retryableTransport} from './retry-policy.js?v=20261113-7';
-import {abortable} from './transport-guard.js?v=20261114-2';
+import {withTransportRetries} from './retry-policy.js?v=20261114-5';
 const $=s=>document.querySelector(s);
 const WEB_BROWSING_SUSPENDED=false;
 const WEB_SAFETY_NOTICE='Website browsing is paused: a WebRTC IP leak was reported. Protection has not been verified. Do not use this preview for anonymous browsing.';
@@ -66,15 +65,12 @@ async function puterFetch(data,record){
  for(const k of Object.keys(headers))if(k.toLowerCase().startsWith('sec-ch-'))delete headers[k];
  headers['Accept-Language']='en-US,en;q=0.9';headers['User-Agent']=navigator.userAgent.replace(/\s+Browzen(?:\/[^\s]+)?$/,'')+' Browzen';headers['DNT']='1';headers['Sec-GPC']='1';
  requests++;
- const method=data.method||'GET',signal=AbortSignal.any([...(record?[record.abort.signal]:[]),...(data.signal?[data.signal]:[]),AbortSignal.timeout(60000)]);let res;
- for(let attempt=0;;attempt++){
-  try{res=await abortable(signal,()=>puter.net.fetch(remote.href,{method,headers,body:data.body??undefined,redirect:'manual',credentials:'omit',signal}));break;}
-  catch(error){if(!retryableTransport(error,method,signal.aborted,attempt))throw error;await new Promise(resolve=>setTimeout(resolve,150*(attempt+1)));}
- }
+ const method=data.method||'GET',signal=AbortSignal.any([...(record?[record.abort.signal]:[]),...(data.signal?[data.signal]:[]),AbortSignal.timeout(60000)]);
+ const {res,bytes}=await withTransportRetries(async()=>{const res=await puter.net.fetch(remote.href,{method,headers,body:data.body??undefined,redirect:'manual',credentials:'omit',signal});if(signal.aborted)throw signal.reason;const bytes=await res.arrayBuffer();return {res,bytes};},{method,signal});
  const raw={};for(const [k,v] of res.headers)raw[k]=v;
  if(typeof res.headers.getSetCookie==='function'){const cookies=res.headers.getSetCookie();if(cookies.length)raw['set-cookie']=cookies;}
  for(const k of Object.keys(raw))if(['link','refresh','nel','report-to'].includes(k.toLowerCase()))delete raw[k];
- let body=await abortable(signal,()=>res.arrayBuffer());if(body.byteLength>48*1024*1024)throw Error('A resource exceeded the local prototype 48 MB limit.');
+ let body=bytes;if(body.byteLength>48*1024*1024)throw Error('A resource exceeded the local prototype 48 MB limit.');
  if((res.headers.get('content-type')||'').includes('text/html')){
   // Defense in depth for static hints; runtime hooks handle ordinary dynamic hints.
   const html=new TextDecoder().decode(body).replace(/<link\b[^>]*>/gi,tag=>/\brel\s*=\s*["']?[^>]*\b(dns-prefetch|preconnect|prerender|prefetch)\b/i.test(tag)?'':tag);

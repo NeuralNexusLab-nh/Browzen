@@ -114,7 +114,7 @@ export function createOpaqueHost({record,transport,siteAction,emit,validate,sess
  }
  function cookieText(){try{return jar().getCookieStringSync(pageURL,{http:false});}catch{return '';}}
  async function connect(payload,token){
-  const code=await(bootstrap??=fetch('/asset/single/content.js?v=20261114-4').then(r=>{if(!r.ok)throw Error('Website sandbox bundle unavailable.');return r.text();}));if(token!==generation||stopped)return;
+  const code=await(bootstrap??=fetch('/asset/single/content.js?v=20261115-1').then(r=>{if(!r.ok)throw Error('Website sandbox bundle unavailable.');return r.text();}));if(token!==generation||stopped)return;
   const pair=new MessageChannel();port?.close();port=pair.port1;const channelPort=port;let unexpected=0;
   const sentResources=new Set((payload.resources||[]).map(r=>r.id));
   function delta(){const list=[...resources.values()].filter(r=>!sentResources.has(r.id));for(const r of list)sentResources.add(r.id);return list;}

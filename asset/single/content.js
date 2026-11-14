@@ -3451,10 +3451,11 @@
     function rpc(type, data = {}) {
       return new Promise((resolve, reject) => {
         const id = ++sequence;
+        const timeout = ["fetch", "resource", "css", "download"].includes(type) ? 185e3 : 65e3;
         const timer = setTimeout(() => {
           pending.delete(id);
           reject(new DOMException("Website operation timed out.", "TimeoutError"));
-        }, 65e3);
+        }, timeout);
         pending.set(id, { resolve, reject, timer });
         port.postMessage({ type, rpc: id, ...data });
       });

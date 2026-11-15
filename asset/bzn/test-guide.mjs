@@ -7,7 +7,14 @@ const guide = await readFile(
   new URL("../../BrowzenNetwork.md", import.meta.url),
   "utf8",
 );
-const snippets = [...guide.matchAll(/```(\w+)\n([\s\S]*?)```/g)];
+const snippets = [...guide.matchAll(/```(\w+)\r?\n([\s\S]*?)```/g)];
+test('guide examples are discovered with LF and Windows CRLF line endings',()=>{
+  for(const source of [guide,guide.replace(/\r?\n/g,'\r\n')]){
+    const blocks=[...source.matchAll(/```(\w+)\r?\n([\s\S]*?)```/g)];
+    assert.ok(blocks.some(([,lang])=>lang==='js'));
+    assert.ok(blocks.some(([,lang])=>lang==='python'));
+  }
+});
 test("agent guide covers native hosting, both cryptographic layers and real HTTP routes without CORS examples", () => {
   for (const route of [
     "/api/auth/register/start",

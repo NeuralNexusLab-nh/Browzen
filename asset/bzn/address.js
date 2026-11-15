@@ -57,14 +57,16 @@ export function parseBzn(value) {
     url.port
   )
     throw Error("Invalid BZN URL.");
-  const host = url.hostname.toLowerCase();
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  url.hostname = host;
   if (!host.endsWith(".bzn")) return null;
-  if (aliases[host])
-    return {
-      alias: true,
-      address: host,
-      url: new URL(url.pathname + url.search + url.hash, aliases[host]).href,
-    };
+  if (aliases[host]) {
+    const target = new URL(aliases[host]);
+    target.pathname = url.pathname;
+    target.search = url.search;
+    target.hash = url.hash;
+    return { alias: true, address: host, url: target.href };
+  }
   const publicKey = unbase32(host.slice(0, -4));
   return {
     alias: false,

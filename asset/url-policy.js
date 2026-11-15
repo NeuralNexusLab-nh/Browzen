@@ -1,4 +1,4 @@
-import {parseBzn} from './bzn/address.js';
+import {parseBzn} from './bzn/address.js?v=20261115-bzn2';
 export function validateRemote(value) {
  const url=new URL(value);
  if(!['http:','https:'].includes(url.protocol))throw Error('Only HTTP and HTTPS websites are supported.');

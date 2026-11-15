@@ -70,6 +70,11 @@ test("aliases use real HTTPS destinations, never a Neutron public key", () => {
     parseBzn("nxlabtw.bzn/test?q=1").url,
     "https://nxlabtw.com/test?q=1",
   );
+  assert.equal(
+    new URL(parseBzn("nxlabtw.bzn//evil.example/").url).origin,
+    "https://nxlabtw.com",
+  );
+  assert.equal(parseBzn("nxlabtw.bzn.").url, "https://nxlabtw.com/");
   assert.equal(vanityEstimate("abc", 100).attempts, 32768);
   assert.throws(() => vanityEstimate("0", 1));
 });

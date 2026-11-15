@@ -1,9 +1,9 @@
-import {addressToURL,validateRemote} from './url-policy.js?v=20261115-bzn1';
+import {addressToURL,validateRemote} from './url-policy.js?v=20261115-bzn2';
 import {createSiteControls,permissionNames} from './site-controls.js?v=20261113-9';
 import {webOrigin} from './config.js';
 import {createOpaqueHost,createWebsiteSession} from './single/host.js?v=20261115-1';
 import {withTransportRetries} from './retry-policy.js?v=20261115-1';
-import {parseBzn,isBzn} from './bzn/address.js';
+import {parseBzn,isBzn} from './bzn/address.js?v=20261115-bzn2';
 const $=s=>document.querySelector(s);
 const WEB_BROWSING_SUSPENDED=false;
 const WEB_SAFETY_NOTICE='Website browsing is paused: a WebRTC IP leak was reported. Protection has not been verified. Do not use this preview for anonymous browsing.';

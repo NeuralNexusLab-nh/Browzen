@@ -1,9 +1,11 @@
-import {addressToURL,validateRemote} from './url-policy.js?v=20261115-bzn2';
+import {addressToURL,validateRemote} from './url-policy.js?v=20261115-guide1';
 import {createSiteControls,permissionNames} from './site-controls.js?v=20261113-9';
 import {webOrigin} from './config.js';
 import {createOpaqueHost,createWebsiteSession} from './single/host.js?v=20261115-1';
 import {withTransportRetries} from './retry-policy.js?v=20261115-1';
-import {parseBzn,isBzn} from './bzn/address.js?v=20261115-bzn2';
+import {parseBzn,isBzn} from './bzn/address.js?v=20261115-guide1';
+import {displayURL,mappedRequest,mappedResponse} from './mapped-site.js?v=20261115-guide1';
+import {endPuterSession} from './account-session.js';
 const $=s=>document.querySelector(s);
 const WEB_BROWSING_SUSPENDED=false;
 const WEB_SAFETY_NOTICE='Website browsing is paused: a WebRTC IP leak was reported. Protection has not been verified. Do not use this preview for anonymous browsing.';
@@ -13,6 +15,7 @@ const tabs=[],records=new Map();let active,sequence=0,requests=0,egress=null,noS
 let websiteSession=createWebsiteSession();
 const bznConnections=new Map();
 async function websiteTransport(data,record){
+ if(record.aliasAddress){const request=mappedRequest(data,record.aliasAddress);if(isBzn(request.url))throw Error('Open this BZN website in its own tab.');return mappedResponse(await puterFetch(request,record),record.aliasAddress,request.url);}
  if(record.bznAddress){const parsed=parseBzn(data.url);if(!parsed||parsed.alias||parsed.address!==record.bznAddress)throw Error('External resources are blocked on BZN sites. No direct or Puter fallback.');let connection=bznConnections.get(parsed.address);if(!connection){connection=(async()=>{const {BznClient}=await import('./bzn/protocol.js');const client=new BznClient(parsed.address,{onState:message=>{record.connectionState=message;if(active===record.id){status(message);$('#egress').textContent=message;$('#egress-time').textContent='Encrypted to the address owner after verification. Neutron can observe connection metadata. This is not a website safety or anonymity guarantee.';}}});try{return await client.connect();}catch(error){client.close();bznConnections.delete(parsed.address);throw error;}})();bznConnections.set(parsed.address,connection);}const client=await connection;if(client.closed){bznConnections.delete(parsed.address);return websiteTransport(data,record);}return client.request(data);}
  if(isBzn(data.url))throw Error('Open the BZN website in its own tab first.');return puterFetch(data,record);
 }
@@ -28,7 +31,7 @@ async function ensureEngine(t){
  if(!globalThis.isSecureContext)throw Error('Browzen requires HTTPS. Open '+webOrigin+'.');
   const frame=document.createElement('iframe');frame.className='content-engine';frame.title='Isolated website content';frame.sandbox='allow-scripts allow-forms';frame.setAttribute('allow',"camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'");frame.hidden=t.id!==active;
   const record={id:t.id,origin:'null',opaque:true,frame,abort:new AbortController(),permissions:{camera:false,microphone:false,geolocation:false}};
-  record.host=createOpaqueHost({record,session:websiteSession,transport:websiteTransport,siteAction:d=>siteControls.handle(record,d),emit:d=>engineEvent(record,d),validate:value=>new URLSearchParams(location.search).has('test')&&/^https:\/\/(?:cdn\.)?browzen\.test\//.test(value)?new URL(value):validateRemote(value)});
+  record.host=createOpaqueHost({record,session:websiteSession,transport:websiteTransport,siteAction:d=>siteControls.handle(record,d),emit:d=>engineEvent(record,d),validate:value=>new URLSearchParams(location.search).has('test')&&/^https:\/\/(?:cdn\.)?browzen\.test\//.test(value)?new URL(value):validateRemote(record.aliasAddress?displayURL(value,record.aliasAddress):value)});
   records.set(t.id,record);$('#viewport').append(frame);layoutFrame(record);if(t.id===active)frame.id='engine';record.ready=Promise.resolve(record);return record;
 }
 function drawTabs(){
@@ -54,12 +57,11 @@ async function navigate(value,t=selected(),{form}={}){
  try {
  if(/^\/?bzn\/(address|host)\/?$/.test(String(value))){location.assign('/'+String(value).replace(/^\//,''));return;}
  let bzn;try{bzn=parseBzn(value);}catch(error){if(/\.bzn(?:[/:?#]|$)/i.test(String(value)))throw error;}
- if(bzn?.alias){location.assign(bzn.url);return;}
  const url=new URLSearchParams(location.search).has('test')&&/^https:\/\/browzen\.test\/(probe|actions|child|single|rendering)\.html(?:[?#].*)?$/.test(value)?value:addressToURL(value,engines[searchEngine][2]);if(url.startsWith('browzen://')){t.url=url;t.title=url.includes('settings')?'Settings':url.includes('about')?'About Browzen':'New Tab';t.error=null;activate(t.id);return;}
  if(WEB_BROWSING_SUSPENDED&&!(new URLSearchParams(location.search).has('test')&&url.startsWith('https://browzen.test/')))throw Error(WEB_SAFETY_NOTICE);
- if(!bzn)await authenticate();t.url=url;t.title=new URL(url).hostname;t.error=null;t.loading=true;if(t.id===active){activate(t.id);status('Preparing this tab…');}else drawTabs();
+ if(!bzn||bzn.alias)await authenticate();t.url=url;t.title=new URL(url).hostname;t.error=null;t.loading=true;if(t.id===active){activate(t.id);status('Preparing this tab…');}else drawTabs();
  await ensureEngine(t);if(t.id===active)activate(t.id);
- const record=records.get(t.id);record.bznAddress=bzn?.address||null;record.opener=t.opener;if(t.id===active)updateConnectionPanel(record);command('navigate',{id:t.id,url,form,opener:t.opener,noScript:!!t.noScript,zoom,level:securityLevel});
+ const record=records.get(t.id);record.bznAddress=bzn&&!bzn.alias?bzn.address:null;record.aliasAddress=bzn?.alias?bzn.address:null;record.opener=t.opener;if(t.id===active)updateConnectionPanel(record);command('navigate',{id:t.id,url,form,opener:t.opener,noScript:!!t.noScript,zoom,level:securityLevel});
  }catch(error){t.loading=false;t.error=error.message||String(error);if(t.id===active)showError(t.error);drawTabs();}
 }
 function showError(message){$('#newtab').hidden=true;if($('#engine'))$('#engine').hidden=true;$('#internal').hidden=true;$('#error-page').hidden=false;$('#error-message').textContent=message;$('#loading').hidden=true;status(message);}
@@ -91,7 +93,7 @@ async function puterFetch(data,record){
 function engineEvent(record,d){
  if(d?.type==='cleanup-result'){record.cleanupResolve?.(!!d.clean);return;}if(d?.type==='engine-error'){const t=tabs.find(t=>t.id===record.id);if(t){t.error=d.error;t.loading=false;if(t.id===active)showError(d.error);drawTabs();}return;}
  if(d?.id!==record.id)return;
- if(d.type==='site-document'){siteControls.document(record,d);return;}
+ if(d.type==='site-document'){if(record.aliasAddress&&d.origin!=='https://'+record.aliasAddress)record.aliasAddress=null;siteControls.document(record,d);return;}
  if(d.type==='site-action-error'){status(d.error);return;}
  const t=tabs.find(t=>t.id===d?.id);if(!t)return;
  if(d.type==='tab-update'){if(d.url)t.url=d.url;if(d.title)t.title=d.title;if('loading'in d)t.loading=!!d.loading;if(t.id===active){$('#address').value=t.url;$('#destination').textContent=t.url;$('#loading').hidden=!t.loading;status(t.loading?'Loading '+t.url:'');}drawTabs();}
@@ -112,7 +114,7 @@ $('#noscript').onchange=e=>{selected().noScript=e.target.checked;command('script
 document.addEventListener('click',e=>{const link=e.target.closest('[data-page],[data-open]');if(!link)return;if(link.dataset.open)navigate(link.dataset.open);else navigate('browzen://'+({home:'newtab'}[link.dataset.page]||link.dataset.page));if($('#browser-menu').matches(':popover-open'))$('#browser-menu').hidePopover();});
 document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='l'){e.preventDefault();$('#address').focus();$('#address').select();}});
 function showGate(message='Use your Puter account to continue.') {authenticated=false;networkMode=false;$('#auth-gate').hidden=false;$('#chrome').inert=true;$('#viewport').inert=true;$('#sign-in-status').textContent=message;}
-function unlock(){authenticated=true;$('#auth-gate').hidden=true;$('#chrome').inert=false;$('#viewport').inert=false;status('');$('#address').focus();checkIP();}
+function unlock(){authenticated=true;logoutButton.disabled=false;$('#auth-gate').hidden=true;$('#chrome').inert=false;$('#viewport').inert=false;status('');$('#address').focus();checkIP();}
 $('#sign-in').onclick=async()=>{const b=$('#sign-in');b.disabled=true;try{await puter.auth.signIn({attempt_temp_user_creation:false});unlock();}catch(error){showGate(error.message||error.msg||'Sign-in was not completed. Try again.');}finally{b.disabled=false;}};
 const setupStarted=Date.now();function checkAuth(){if(networkMode)return;if(!globalThis.isSecureContext){showGate('HTTPS is required to protect your sign-in and start isolated tabs.');const b=$('#sign-in');b.textContent='Open secure Browzen';b.disabled=false;b.onclick=()=>location.assign(webOrigin);return;}if(window.puter?.auth){puter.auth.isSignedIn()?unlock():showGate();$('#sign-in').disabled=false;}else if(Date.now()-setupStarted<20000)setTimeout(checkAuth,200);else showGate('Puter could not load. Check your connection and reload.');}
 const connectionSection=$('#panel .panel-grid section');connectionSection.querySelector('.badge')?.remove();
@@ -120,6 +122,7 @@ const requestNumber=connectionSection.querySelector('#request-count');requestNum
 const permissionSection=$('#panel .panel-grid section+section');permissionSection.querySelectorAll('.permission').forEach(row=>row.remove());
 for(const [kind,name]of Object.entries(permissionNames)){if(kind==='popups')continue;const row=document.createElement('div');row.className='permission';const label=document.createElement('label');label.textContent=name;label.htmlFor='allow-'+kind;const input=document.createElement('input');input.type='checkbox';input.role='switch';input.id='allow-'+kind;input.onchange=async()=>{const record=records.get(active);if(!record?.mainScope){input.checked=false;status('Open a website before changing its permissions.');return;}if(!input.checked){siteControls.revoke(record,[kind]);return;}input.checked=false;try{await siteControls.allowFromPanel(record,[kind]);}catch(e){status(e.message);}siteControls.sync();};row.append(label,input);permissionSection.append(row);}
 const identityButton=document.createElement('button');identityButton.textContent='Refresh Identity';identityButton.onclick=()=>refreshIdentity();$('#browser-menu').append(identityButton);
+const logoutButton=document.createElement('button');logoutButton.id='logout';logoutButton.className='menu-logout';logoutButton.textContent='Log out';logoutButton.disabled=!authenticated;logoutButton.onclick=async()=>{logoutButton.disabled=true;$('#browser-menu').hidePopover();$('#chrome').inert=true;$('#viewport').inert=true;try{await endPuterSession({auth:window.puter?.auth,clear:async()=>{authenticated=false;await refreshIdentity();},lock:()=>{egress=null;$('#egress').textContent='Not connected';$('#egress-time').textContent='';showGate('Signed out. Login with Puter to continue.');}});}catch(error){authenticated=!!window.puter?.auth?.isSignedIn();logoutButton.disabled=!authenticated;$('#chrome').inert=false;$('#viewport').inert=false;status(error.message);}};$('#browser-menu').append(logoutButton);
 for(const [popup,button]of [['#panel','#control'],['#browser-menu','#menu']])for(const event of ['toggle','beforetoggle'])$(popup).addEventListener(event,e=>$(button).setAttribute('aria-expanded',String(e.newState==='open')));
 identityButton.addEventListener('click',()=>$('#browser-menu').hidePopover());
 async function retire(record){if(!record)return true;if(record.cleanup)return record.cleanup;record.retired=true;siteControls?.cancel(record);record.abort.abort();record.frame.hidden=true;if(record.host){record.host.destroy();record.frame.remove();records.delete(record.id);return true;}record.cleanup=(async()=>{let timer;const clean=await new Promise(resolve=>{record.cleanupResolve=resolve;record.port?.postMessage({type:'clear'});timer=setTimeout(()=>resolve(false),6500);});clearTimeout(timer);record.port?.close();record.frame.remove();records.delete(record.id);return clean;})();return record.cleanup;}
@@ -154,7 +157,6 @@ new ResizeObserver(()=>{for(const record of records.values())layoutFrame(record)
 function layoutFrame(record){record.frame.style.width='100%';record.frame.style.height='100%';record.frame.style.left='0';record.frame.style.top='0';record.frame.style.transform='none';}
 siteControls=createSiteControls({records,active:()=>active,newTab,activate,closeTab,navigate,command,status,validateRemote,testMode:new URLSearchParams(location.search).has('test')});
 const networkOnly=()=>{networkMode=true;$('#auth-gate').hidden=true;$('#chrome').inert=false;$('#viewport').inert=false;status('');$('#egress').textContent='Browzen Network';$('#egress-time').textContent='BZN does not require Puter. Public websites still require sign-in.';$('#address').focus();};
-$('#network-only').onclick=networkOnly;
 document.querySelectorAll('[data-bzn-page]').forEach(button=>button.onclick=()=>location.assign('/bzn/'+button.dataset.bznPage));
 newTab();const initialBzn=new URLSearchParams(location.search).get('bzn');if(initialBzn){networkOnly();navigate(initialBzn);}else{showGate('Preparing secure sign-in…');$('#sign-in').disabled=true;checkAuth();}
 addEventListener('pagehide',()=>{for(const connection of bznConnections.values())connection.then(client=>client.close()).catch(()=>{});});

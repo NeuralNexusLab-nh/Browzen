@@ -65,7 +65,12 @@ export function parseBzn(value) {
     target.pathname = url.pathname;
     target.search = url.search;
     target.hash = url.hash;
-    return { alias: true, address: host, url: target.href };
+    return {
+      alias: true,
+      address: host,
+      url: "https://" + host + url.pathname + url.search + url.hash,
+      targetURL: target.href,
+    };
   }
   const publicKey = unbase32(host.slice(0, -4));
   return {

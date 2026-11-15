@@ -64,17 +64,18 @@ test("aliases use real HTTPS destinations, never a Neutron public key", () => {
   ]) {
     const a = parseBzn(name + ".bzn");
     assert.equal(a.alias, true);
-    assert.equal(a.url, target);
+    assert.equal(a.targetURL, target);
+    assert.equal(a.url, "https://" + name + ".bzn/");
   }
   assert.equal(
-    parseBzn("nxlabtw.bzn/test?q=1").url,
+    parseBzn("nxlabtw.bzn/test?q=1").targetURL,
     "https://nxlabtw.com/test?q=1",
   );
   assert.equal(
-    new URL(parseBzn("nxlabtw.bzn//evil.example/").url).origin,
+    new URL(parseBzn("nxlabtw.bzn//evil.example/").targetURL).origin,
     "https://nxlabtw.com",
   );
-  assert.equal(parseBzn("nxlabtw.bzn.").url, "https://nxlabtw.com/");
+  assert.equal(parseBzn("nxlabtw.bzn.").url, "https://nxlabtw.bzn/");
   assert.equal(vanityEstimate("abc", 100).attempts, 32768);
   assert.throws(() => vanityEstimate("0", 1));
 });
@@ -127,14 +128,11 @@ test("empty host keys are rejected instead of silently generating an identity", 
   await assert.rejects(() => host.start(), /private key/);
   host.stop();
 });
-test("BZN URL validation does not send malformed keys or reserved aliases to Puter", async () => {
+test("BZN URL validation rejects malformed keys and retains virtual names", async () => {
   const { validateRemote, addressToURL } = await import("../url-policy.js");
   const key = await identity();
   assert.equal(addressToURL(key.address), "https://" + key.address + "/");
-  assert.equal(
-    validateRemote("https://acmtn.bzn/").href,
-    "https://neutron.nxlabtw.com/",
-  );
+  assert.equal(validateRemote("https://acmtn.bzn/").href, "https://acmtn.bzn/");
   assert.throws(() => validateRemote("https://typo.bzn/"));
 });
 test("partial connection failure closes every opened room", async () => {

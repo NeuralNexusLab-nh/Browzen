@@ -117,6 +117,70 @@ nav {
   gap: 22px;
   flex-wrap: wrap;
 }
+nav {
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+nav a {
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition:
+    background 0.16s,
+    color 0.16s;
+}
+nav a:hover {
+  background: #ffffff08;
+  color: var(--text);
+}
+nav a[aria-current="page"] {
+  background: #87d8e912;
+  border: 1px solid #87d8e92b;
+}
+nav .repo-button {
+  border: 1px solid #b2a5ff55;
+  background: #b2a5ff0b;
+  color: #ddd6ff;
+  font-weight: 650;
+}
+.topbar {
+  gap: 22px;
+  backdrop-filter: blur(20px);
+}
+.card {
+  transition: border-color 0.2s;
+  box-shadow:
+    0 16px 52px #0002,
+    inset 0 1px 0 #ffffff04;
+}
+.card:hover {
+  border-color: #43516a;
+}
+.card.accent {
+  border-top-color: var(--purple);
+}
+details[open] > summary {
+  color: var(--cyan);
+  margin-bottom: 12px;
+}
+summary::marker {
+  color: var(--purple);
+}
+.metric {
+  white-space: pre-line;
+}
+@media (max-width: 1100px) {
+  .topbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  nav {
+    justify-content: flex-start;
+  }
+  .brand {
+    flex-shrink: 0;
+  }
+}
 nav a {
   font-size: 13px;
   color: var(--muted);

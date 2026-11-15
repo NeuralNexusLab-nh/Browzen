@@ -23,7 +23,7 @@
 
 ## Browzen Network
 
-[**Explore Browzen Network →**](BrowzenNetwork.md) — Generate a public-key `.bzn` address and host a local website through encrypted Neutron channels. Web-only; no Puter account or wildcard DNS required. Not Tor or an anonymity guarantee.
+[**Browzen Network · Agent integration guide →**](BrowzenNetwork.md) — Give this guide to your coding agent to connect your website to a public-key `.bzn` address. Includes browser hosting, direct Neutron HTTPS APIs, JavaScript/Python examples and the encrypted protocol. No Puter account or wildcard DNS required. Not Tor or an anonymity guarantee.
 
 <p align="center">
   <a href="https://drive.proton.me/urls/C4CPKQBZDR#bhvHs86uvOHu">

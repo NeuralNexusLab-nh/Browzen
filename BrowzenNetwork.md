@@ -103,7 +103,7 @@ Neutron currently retains messages for about 15 seconds, recommends application 
 
 Website rendering reuses Browzen Web's existing restricted content engine and compatibility limits. It is not native browser origin support for a new Internet TLD. Runtime website state remains temporary; private keys and Host settings are not automatically persisted. Copies, key backups and OS/browser traces are outside that guarantee.
 
-Serve the repository as static files. `/bzn/address` and `/bzn/host` must resolve to their corresponding `index.html`; if the host lacks directory-index handling, add exact rewrites for these two paths. No wildcard DNS is needed. Allow the page's documented Neutron module/WASM/API requests in any additional deployment CSP; Host also needs loopback access. Do not grant this access to rendered website frames.
+Serve the repository as static files. `/bzn/address` and `/bzn/host` must resolve to their corresponding `index.html`; the included `edgeone.json` provides exact rewrites for EdgeOne. Other static hosts may use directory indexes or equivalent rewrites. No wildcard DNS is needed. Allow the page's documented Neutron module/WASM/API requests in any additional deployment CSP; Host also needs loopback access. Do not grant this access to rendered website frames.
 
 Build the pinned local HPKE bundle and run tests:
 

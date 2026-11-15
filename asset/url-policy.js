@@ -1,8 +1,10 @@
+import {parseBzn} from './bzn/address.js';
 export function validateRemote(value) {
  const url=new URL(value);
  if(!['http:','https:'].includes(url.protocol))throw Error('Only HTTP and HTTPS websites are supported.');
  if(url.username||url.password)throw Error('Credentials embedded in URLs are not allowed.');
  const h=url.hostname.toLowerCase().replace(/^\[|\]$/g,'').replace(/\.$/,'');
+ if(h.endsWith('.bzn')){const bzn=parseBzn(url.href);if(bzn.alias)return new URL(bzn.url);return new URL(bzn.url);}
  if(h==='onion'||h.endsWith('.onion'))throw Error('This version uses Puter, not Tor. Onion websites are unavailable.');
  if(!h.includes('.')||h==='localhost'||/\.(localhost|local|internal|invalid|test|lan|home|arpa)$/.test(h)||h.includes(':'))throw Error('Local/private or reserved network names are not allowed.');
  if(/^\d+\.\d+\.\d+\.\d+$/.test(h)){

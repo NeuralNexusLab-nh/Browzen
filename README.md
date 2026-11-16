@@ -19,11 +19,7 @@
   </a>
 </p>
 
-<p align="center"><strong>Browzen Web · Public web via Puter · BZN via Neutron · No Tor</strong><br><sub>The web version of Browzen. Best-effort protections, not guaranteed anonymity. <a href="asset/LOCAL.md">Web limitations</a></sub></p>
-
-## Browzen Network
-
-[**Browzen Network · Agent integration guide →**](BrowzenNetwork.md) — Give this guide to your coding agent to connect your website to a public-key `.bzn` address. Includes browser hosting, direct Neutron HTTPS APIs, JavaScript/Python examples and the encrypted protocol. No Puter account or wildcard DNS required. Not Tor or an anonymity guarantee.
+<p align="center"><strong>Browzen Web · Requires Puter · No Tor</strong><br><sub>The web version of Browzen. Best-effort protections, not guaranteed anonymity. <a href="asset/LOCAL.md">Web limitations</a></sub></p>
 
 <p align="center">
   <a href="https://drive.proton.me/urls/C4CPKQBZDR#bhvHs86uvOHu">

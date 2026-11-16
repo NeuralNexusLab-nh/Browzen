@@ -1,8 +1,0 @@
-{
-  "rewrites": [
-    {"source": "/bzn/address", "destination": "/bzn/address/index.html"},
-    {"source": "/bzn/address/", "destination": "/bzn/address/index.html"},
-    {"source": "/bzn/host", "destination": "/bzn/host/index.html"},
-    {"source": "/bzn/host/", "destination": "/bzn/host/index.html"}
-  ]
-}

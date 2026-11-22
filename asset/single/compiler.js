@@ -1,6 +1,6 @@
 // Syntax-aware URL globals. Native sandbox/CSP, not this rewriter, provide isolation.
 import {parse} from './vendor.js';
-export function rewriteJS(source,base,module=false){
+export function rewriteJS(source,base,module=false,{mediateReceivers=false,traceCaught=false}={}){
  const ast=parse(source,{ecmaVersion:'latest',sourceType:module?'module':'script',allowAwaitOutsideFunction:true,allowReturnOutsideFunction:!module,allowHashBang:true});
  const scopes=new WeakMap(),bound=new WeakSet(),edits=[],imports=[];
  const virtual=new Set(['window','self','globalThis','location','history','fetch','parent','top','frames','opener']);
@@ -19,7 +19,14 @@ export function rewriteJS(source,base,module=false){
  function property(n){return n?.type==='MemberExpression'?n.computed?n.property.type==='Literal'?n.property.value:null:n.property.name:null;}
  function isWindow(n,s){return n?.type==='Identifier'&&['window','self','globalThis','parent','top'].includes(n.name)&&!local(n.name,s)||property(n)==='defaultView'&&isDocument(n.object,s);}
  function isDocument(n,s){return n?.type==='Identifier'&&n.name==='document'&&!local('document',s)||property(n)==='document'&&isWindow(n.object,s);}
- function visit(n,s,p,key){s=scopes.get(n)||s;
+ function visit(n,s,p,key,thisOwner='global'){s=scopes.get(n)||s;
+  if(traceCaught&&n.type==='CatchClause'&&n.param?.type==='Identifier')edits.push([n.body.start+1,n.body.start+1,'__bzn.caught('+n.param.name+');']);
+  if(n.type==='FunctionDeclaration'||n.type==='FunctionExpression')thisOwner='function';
+  if(n.type==='StaticBlock')thisOwner='class';
+  // Script-level `this` (including lexical arrows) must refer to the same
+  // managed window as `window`; ordinary function/class receivers stay native.
+  if(n.type==='ThisExpression'&&thisOwner==='global'&&!module){edits.push([n.start,n.end,'__bzn.window']);return;}
+  if(n.type==='ThisExpression'&&mediateReceivers&&thisOwner!=='global'){edits.push([n.start,n.end,'__bzn.receiver(this)']);return;}
   if(property(n)==='location'&&(isDocument(n.object,s)||isWindow(n.object,s))){edits.push([n.start,n.end,'__bzn.location']);return;}
   if(property(n)==='defaultView'&&isDocument(n.object,s)){edits.push([n.start,n.end,'__bzn.window']);return;}
   if(n.type==='ImportDeclaration'||n.type==='ExportNamedDeclaration'||n.type==='ExportAllDeclaration')if(n.source){const alias='bzn:'+new URL(n.source.value,base).href;imports.push({alias,url:new URL(n.source.value,base).href});edits.push([n.source.start,n.source.end,JSON.stringify(alias)]);}
@@ -31,7 +38,7 @@ export function rewriteJS(source,base,module=false){
    const label=/^(LabeledStatement|BreakStatement|ContinueStatement)$/.test(p?.type||'');
    if(!property&&!label&&(!keyOnly||p.shorthand)){const v='__bzn.'+n.name;edits.push([n.start,n.end,p?.shorthand&&key==='value'?n.name+':'+v:v]);}
   }
-  children(n,(c,k)=>{if(p?.shorthand&&key==='key')return;visit(c,s,n,k);});
+  children(n,(c,k)=>{if(p?.shorthand&&key==='key')return;visit(c,s,n,k,n.type==='PropertyDefinition'&&k==='value'?'class':thisOwner);});
  }
  visit(ast,null,null,'');
  const unique=new Map();for(const e of edits)unique.set(e[0]+':'+e[1],e);

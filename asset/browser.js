@@ -1,7 +1,7 @@
 import {addressToURL,validateRemote} from './url-policy.js?v=20261116-network-removal';
 import {createSiteControls,permissionNames} from './site-controls.js?v=20261113-9';
 import {webOrigin} from './config.js';
-import {createOpaqueHost,createWebsiteSession} from './single/host.js?v=20261115-1';
+import {createOpaqueHost,createWebsiteSession} from './single/frame-host.js?v=20261122-captcha1';
 import {withTransportRetries} from './retry-policy.js?v=20261115-1';
 import {endPuterSession} from './account-session.js';
 const $=s=>document.querySelector(s);

@@ -5,7 +5,7 @@
 <button id="storage-button">Write temporary storage</button><button id="permission">Request clipboard read</button>
 <script>
 const report={};function check(name,fn){try{report[name]=fn();}catch(e){report[name]=e.name;}}
-const nativeWindow=Function('return this')();
+const nativeWindow=(0,eval)('this');
 check('parentDOM',()=>nativeWindow.parent.document.title);
 check('parentStorage',()=>nativeWindow.parent.localStorage.length);
 check('nativeOrigin',()=>nativeWindow.origin);
@@ -15,7 +15,7 @@ check('timezone',()=>Intl.DateTimeFormat().resolvedOptions().timeZone);
 check('cpu',()=>navigator.hardwareConcurrency);
 check('Canvas',()=>document.createElement('canvas').toDataURL());
 check('fontAPI',()=>document.fonts.check('14px Arial'));
-check('nestedRealm',()=>{const f=document.createElement('iframe');document.body.append(f);return f.contentWindow?'UNEXPECTED REALM':'blocked';});
+check('nestedRealm',()=>{const f=document.createElement('iframe');document.body.append(f);return f.contentWindow&&f.contentWindow.RTCPeerConnection===undefined?'Mediated frame; no native WebRTC constructor':'UNEXPECTED NATIVE REALM';});
 check('parserRealm',()=>{const doc=new DOMParser().parseFromString('<iframe></iframe>','text/html');return doc.querySelector('iframe')?'UNEXPECTED FRAME':'blocked';});
 document.querySelector('#facts').textContent=JSON.stringify(report,null,2);
 document.querySelector('#storage').textContent='Memory storage: '+(localStorage.getItem('synthetic')||'empty');
